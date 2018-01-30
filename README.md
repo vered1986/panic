@@ -1,5 +1,5 @@
 # **PANiC!**
-using **P**redicate-**A**rguments tuples to interpret **N**oun-**C**ompounds
+## using **P**redicate-**A**rguments tuples to interpret **N**oun-**C**ompounds
 
 ## What's in this repository?
 
