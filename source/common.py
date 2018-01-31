@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 logger.setLevel(logging.DEBUG)
 
 
-def load_binary_embeddings(embeddings_file, vocab=None):
+def load_binary_embeddings(embeddings_file, vocab=None, normalize=False):
     """
     Load binary word embeddings, stored in two files: a numpy binary file (.npy)
     and a vocabulary file (.vocab).
@@ -25,6 +25,11 @@ def load_binary_embeddings(embeddings_file, vocab=None):
         words, vectors = zip(*[(word, wv[i, :]) for i, word in enumerate(words) if word in vocab])
         wv = np.vstack(vectors)
         logger.info('Loaded {} words'.format(len(words)))
+
+    # Normalize each row (word vector) in the matrix to sum-up to 1
+    if normalize:
+        row_norm = np.sum(np.abs(wv) ** 2, axis=-1) ** (1. / 2)
+        wv /= row_norm[:, np.newaxis]
 
     return wv, words
 

@@ -1,4 +1,4 @@
-from model import *
+from encoder_decoder import *
 from train import *
 
 import numpy as np

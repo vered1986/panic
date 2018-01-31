@@ -15,7 +15,7 @@ DISPLAY_FREQ = 1000
 
 
 class Model:
-    def __init__(self, wv, model_dir=None, n_epochs=10, minibatch_size=100, patience=5):
+    def __init__(self, wv, model_dir=None, n_epochs=10, minibatch_size=100, patience=5, update_embeddings=False):
         """
         Initialize the model
         :param wv: pre-trained word embedding vectors
@@ -23,6 +23,7 @@ class Model:
         :param n_epochs: number of training epochs
         :param minibatch_size: the number of instances in a mini batch (default 10)
         :param patience: how many epochs with no improvement on the loss to wait before stopping
+        :param update_embeddings: whether to update the embeddings
         """
         self.wv = wv
         self.n_epochs = n_epochs
@@ -30,6 +31,12 @@ class Model:
         self.minibatch_size = minibatch_size
         self.model_dir = model_dir
         self.patience = patience
+        self.update_embeddings = update_embeddings
+
+        if not self.update_embeddings:
+            self.lookup = lambda w : dy.nobackprop(dy.lookup(self.model_parameters['word_lookup'], w))
+        else:
+            self.lookup = lambda w: dy.lookup(self.model_parameters['word_lookup'], w)
 
         if model_dir is not None:
             if not os.path.exists(model_dir):
@@ -51,7 +58,16 @@ class Model:
         """
         Save the trained model to a file
         """
-        self.model.save(output_prefix + '.model')
+        save_to = output_prefix + '.model'
+
+        self.model_parameters['W1'].save(save_to, '/W1')
+        self.model_parameters['W2'].save(save_to, '/W2', append=True)
+        self.model_parameters['W_p'].save(save_to, '/W_p', append=True)
+        self.builder.param_collection().save(save_to, '/builder', append=True)
+
+        if self.update_embeddings:
+            print('here')
+            self.model_parameters['word_lookup'].save(save_to, '/lookup_table', append=True)
 
     def save_predicate_matrix(self, predicates, filename):
         """
@@ -60,53 +76,61 @@ class Model:
         :param filename: where to save the matrix (in numpy npy format)
         """
         renew_every = 1000
-        wlookup = self.model_parameters['word_lookup']
         vecs = []
 
         for i, pred in enumerate(predicates):
             if i % renew_every == 0:
                 logger.info('Predicates: {}/{}'.format(i, len(predicates)))
                 dy.renew_cg()
-            vecs.append(self.builder.initial_state().transduce([dy.lookup(wlookup, w, update=False)
-                                                                for w in pred])[-1].npvalue())
+            vecs.append(self.builder.transduce([self.lookup(w) for w in pred])[-1].npvalue())
 
         matrix = np.vstack(vecs)
         np.save(filename, matrix)
         return matrix
 
-    def predict_w1(self, w2, predicate, k=1):
+    def predict_w1(self, w2, predicate, k=1, vocab=None):
         """
         Predict the word w1 given w2 and the predicate
         :param w2: the index of w2
         :param predicate: a list of word indices in the predicate
         :param k: the number of most suited w1s to return
+        :param vocab: limited vocabulary to predict from
         :return the possible indices of w1
         """
         dy.renew_cg()
-        word_lookup = self.model_parameters['word_lookup']
-        mlp = dy.parameter(self.model_parameters['W1'])
-        w2_vec = dy.lookup(word_lookup, w2, update=False)
-        pred_words = [dy.lookup(word_lookup, w, update=False) for w in predicate]
-        pred_vec = self.builder.initial_state().transduce(pred_words)[-1]
-        w1_p = (mlp * dy.concatenate([w2_vec, pred_vec])).npvalue()
-        return most_similar_words(self.wv, w1_p, k)
+        W1 = dy.parameter(self.model_parameters['W1'])
+        pred_words = [self.lookup(w) for w in predicate]
+        w2_vec = self.lookup(w2)
+        w1_p = self.__predict_w1__(W1, pred_words, w2_vec).npvalue()
+        if vocab:
+            similar = most_similar_words(self.wv, w1_p, k * 5)
+            similar = [w for w in similar if w in vocab][:k]
+        else:
+            similar = most_similar_words(self.wv, w1_p, k)
 
-    def predict_w2(self, w1, predicate, k=1):
+        return similar
+
+    def predict_w2(self, w1, predicate, k=1, vocab=None):
         """
         Predict the word w2 given w1 and the predicate
         :param w1: the index of w1
         :param predicate: a list of word indices in the predicate
         :param k: the number of most suited w1s to return
+        :param vocab: limited vocabulary to predict from
         :return the possible indices of w2
         """
         dy.renew_cg()
-        word_lookup = self.model_parameters['word_lookup']
-        mlp = dy.parameter(self.model_parameters['W2'])
-        w1_vec = dy.lookup(word_lookup, w1, update=False)
-        pred_words = [dy.lookup(word_lookup, w, update=False) for w in predicate]
-        pred_vec = self.builder.initial_state().transduce(pred_words)[-1]
-        w2_p = (mlp * dy.concatenate([w1_vec, pred_vec])).npvalue()
-        return most_similar_words(self.wv, w2_p, k)
+        W2 = dy.parameter(self.model_parameters['W2'])
+        pred_words = [self.lookup(w) for w in predicate]
+        w1_vec = self.lookup(w1)
+        w2_p = self.__predict_w2__(W2, pred_words, w1_vec).npvalue()
+        if vocab:
+            similar = most_similar_words(self.wv, w2_p, k * 5)
+            similar = [w for w in similar if w in vocab][:k]
+        else:
+            similar = most_similar_words(self.wv, w2_p, k)
+
+        return similar
 
     def predict_predicate(self, w1, w2, predicate_matrix, k=1):
         """
@@ -118,12 +142,46 @@ class Model:
         :return the indices of the predicted predicate in the predicate matrix
         """
         dy.renew_cg()
-        word_lookup = self.model_parameters['word_lookup']
-        mlp = dy.parameter(self.model_parameters['W3'])
-        w1_vec = dy.lookup(word_lookup, w1, update=False)
-        w2_vec = dy.lookup(word_lookup, w2, update=False)
-        pred_p = (mlp * dy.concatenate([w1_vec, w2_vec])).npvalue()
+        W_p = dy.parameter(self.model_parameters['W_p'])
+        w1_vec = self.lookup(w1)
+        w2_vec = self.lookup(w2)
+        pred_p = self.__predict_predicate__(W_p, w1_vec, w2_vec).npvalue()
         return most_similar_words(predicate_matrix, pred_p, k)
+
+    def __predict_w1__(self, W_w, pred_words, w2_vec):
+        """
+        Predict the word w1 given w2 and the predicate
+        :param W_w: the matrix for word prediction
+        :param w2_vec: the index of w2
+        :param pred_words: a list of word indices in the predicate
+        :return a vector representing the predicted w1
+        """
+        f, b = self.builder.add_inputs(pred_words)[-1]
+        pred_vec = b.output()
+        return W_w * dy.concatenate([pred_vec, w2_vec])
+
+    def __predict_w2__(self, W_w, pred_words, w1_vec):
+        """
+        Predict the word w2 given w1 and the predicate
+        :param W_w: the matrix for word prediction
+        :param w1_vec: the index of w1
+        :param pred_words: a list of word indices in the predicate
+        :return a vector representing the predicted w2
+        """
+        f, b = self.builder.add_inputs(pred_words)[-1]
+        pred_vec = f.output()
+        return W_w * dy.concatenate([pred_vec, w1_vec])
+
+    def __predict_predicate__(self, W_p, w1_vec, w2_vec):
+        """
+        Predict the word w2 given w1 and the predicate
+        :param W_p: the matrix for predicate prediction
+        :param w1_vec: the index of w1
+        :param w2_vec: the index of w2
+        :return a vector representing the predicted predicate
+        """
+        pred_p_input = dy.concatenate([w2_vec, w1_vec])
+        return W_p * pred_p_input
 
     def __train__(self, train_set):
         """
@@ -132,7 +190,6 @@ class Model:
         """
         trainer = dy.AdamTrainer(self.model)
         logger.info('Training with len(train) = {}'.format(len(train_set)))
-        word_lookup = self.model_parameters['word_lookup']
         prev_loss = np.infty
         patience_count = 0
 
@@ -146,34 +203,40 @@ class Model:
 
             for minibatch in range(nminibatches):
                 dy.renew_cg()
-                mlp_1, mlp_2, mlp_3 = dy.parameter(self.model_parameters['W1']), \
-                                      dy.parameter(self.model_parameters['W2']), \
-                                      dy.parameter(self.model_parameters['W3'])
+                W1, W2, W_p = dy.parameter(self.model_parameters['W1']), \
+                              dy.parameter(self.model_parameters['W2']), \
+                              dy.parameter(self.model_parameters['W_p'])
 
                 batch_indices = epoch_indices[minibatch_size * minibatch:minibatch_size * (minibatch + 1)]
                 batch_instances = [train_set[i] for i in batch_indices]
-                losses = []
+                w1_losses, w2_losses, pred_losses = [], [], []
 
                 for w1, predicate, w2 in batch_instances:
-                    w1_vec = dy.lookup(word_lookup, w1, update=False)
-                    w2_vec = dy.lookup(word_lookup, w2, update=False)
-                    pred_words = [dy.lookup(word_lookup, w, update=False) for w in predicate]
-                    pred_vec = self.builder.initial_state().transduce(pred_words)[-1]
+                    w1_vec, w2_vec = self.lookup(w1), self.lookup(w2)
+                    pred_words = [self.lookup(w) for w in predicate]
+                    pred_vec = self.builder.transduce(pred_words)[-1]
 
                     # Predict w1, w2 and the predicate from each other
-                    w1_p = mlp_1 * dy.concatenate([w2_vec, pred_vec])
-                    w2_p = mlp_2 * dy.concatenate([w1_vec, pred_vec])
-                    pred_p = mlp_3 * dy.concatenate([w1_vec, w2_vec])
+                    w1_p = self.__predict_w1__(W1, pred_words, w2_vec)
+                    w2_p = self.__predict_w2__(W2, pred_words, w1_vec)
+                    pred_p = self.__predict_predicate__(W_p, w1_vec, w2_vec)
 
-                    losses.extend([dy.squared_distance(w1_vec, w1_p),
-                                   dy.squared_distance(w2_vec, w2_p),
-                                   dy.squared_distance(pred_vec, pred_p)])
+                    w1_losses.append(dy.squared_distance(w1_vec, w1_p))
+                    w2_losses.append(dy.squared_distance(w2_vec, w2_p))
+                    pred_losses.append(dy.squared_distance(pred_vec, pred_p))
 
-                loss = dy.esum(losses)
-                batch_loss = loss.value() / len(batch_instances)
+                w1_loss, w2_loss, pred_loss = dy.esum(w1_losses), dy.esum(w2_losses), dy.esum(pred_losses)
+                loss = dy.esum([w1_loss, w2_loss, pred_loss])
+                w1_batch_loss = w1_loss.value() / len(batch_instances)
+                w2_batch_loss = w2_loss.value() / len(batch_instances)
+                pred_batch_loss = pred_loss.value() / len(batch_instances)
+                batch_loss = w1_batch_loss + w2_batch_loss + pred_batch_loss
                 if (minibatch + 1) % DISPLAY_FREQ == 0:
-                    logger.info('Epoch {}/{}, batch {}/{}, loss = {}'.format(
-                        (epoch + 1), self.n_epochs, (minibatch + 1), nminibatches, batch_loss))
+                    logger.info(
+                        'Epoch {}/{}, batch {}/{}, Loss: [w1={:.3f}, w2={:.3f}, predicate={:.3f}, total={:.3f}]'.
+                            format(
+                        (epoch + 1), self.n_epochs, (minibatch + 1), nminibatches, w1_batch_loss,
+                        w2_batch_loss, pred_batch_loss, batch_loss))
                 loss.backward()
                 trainer.update()
                 total_loss += batch_loss
@@ -205,22 +268,23 @@ class Model:
         self.model = dy.ParameterCollection()
 
         # LSTM for predicate
-        self.builder = dy.LSTMBuilder(NUM_LAYERS, self.embeddings_dim, self.embeddings_dim * 2, self.model)
+        self.lstm_out_dim = 2 * self.embeddings_dim
+        self.builder = dy.BiRNNBuilder(NUM_LAYERS, self.embeddings_dim, self.lstm_out_dim, self.model, dy.LSTMBuilder)
 
         self.model_parameters = {}
         self.model_parameters['word_lookup'] = self.model.lookup_parameters_from_numpy(self.wv)
 
         # Predict w1 from w2 and the predicate
-        self.model_parameters['W1'] = self.model.add_parameters((self.embeddings_dim, self.embeddings_dim * 3))
-
-        # Predict w2 from w1 and the predicate
-        self.model_parameters['W2'] = self.model.add_parameters((self.embeddings_dim, self.embeddings_dim * 3))
+        self.model_parameters['W1'] = self.model.add_parameters((self.embeddings_dim,
+                                                                 self.embeddings_dim + self.lstm_out_dim / 2))
+        self.model_parameters['W2'] = self.model.add_parameters((self.embeddings_dim,
+                                                                 self.embeddings_dim + self.lstm_out_dim / 2))
 
         # Predict the predicate from w1 and w2
-        self.model_parameters['W3'] = self.model.add_parameters((self.embeddings_dim * 2, self.embeddings_dim * 2))
+        self.model_parameters['W_p'] = self.model.add_parameters((self.lstm_out_dim, 2 * self.embeddings_dim))
 
     @classmethod
-    def load_model(cls, model_file_prefix, wv):
+    def load_model(cls, model_file_prefix, wv, update_embeddings=False):
         """
         Load the trained model from a file
         """
@@ -229,6 +293,13 @@ class Model:
         # Load the model
         load_from = model_file_prefix + '.model'
         logger.info('Loading the model from {}...'.format(load_from))
-        classifier.model.populate(load_from)
+
+        classifier.model_parameters['W1'].populate(load_from, '/W1')
+        classifier.model_parameters['W2'].populate(load_from, '/W2')
+        classifier.model_parameters['W_p'].populate(load_from, '/W_p')
+        classifier.builder.param_collection().populate(load_from, '/builder')
+
+        if update_embeddings:
+            classifier.model_parameters['word_lookup'].populate(load_from, '/lookup_table')
 
         return classifier
