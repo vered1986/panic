@@ -44,7 +44,7 @@ We use this in several tasks detailed below.
 - [dyNET](https://dynet.readthedocs.io)
 - ScikitLearn
 
-### Training the Model
+### Training the World-Knowledge Model
 
 ```
 usage: train.py [-h] [--dynet_requested_gpus DYNET_REQUESTED_GPUS]
@@ -77,9 +77,9 @@ Where `dataset` is the filtered ReVerb file,
 `model_dir` is where the model should be saved, and `embeddings_file` is the path to word embeddings files 
 (.npy and .vocab, created using this [script](https://github.com/vered1986/PythonUtils/blob/master/word_embeddings/format_convertion/convert_text_embeddings_to_binary.py)).
 
-#### Noun-Compounds Interpretation Tasks
+### Noun-Compounds Interpretation Tasks
 
-##### Paraphrasing
+### Paraphrasing
 
 There are two variants of the noun-compound paraphrasing task:
 
@@ -100,7 +100,7 @@ For the second variant, we predict the paraphrase vector of each noun-compound,
 and then retrieve the `k` most similar paraphrases to it from the ReVerb corpus. 
 
 
-##### Relation Classification
+#### Relation Classification
 
 In this task, noun-compounds are annotated to a predefined set of relations, and the model has to predict the correct 
 relation between the constituents of an unobserved compound. For example, `olive oil` may belong to the `SOURCE` relation 
@@ -136,6 +136,6 @@ optional arguments:
 ```
 
 
-##### Compositionality Grading
+#### Compositionality Grading
 
 TBD
