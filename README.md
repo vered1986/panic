@@ -79,7 +79,7 @@ Where `dataset` is the filtered ReVerb file,
 
 ### Noun-Compounds Interpretation Tasks
 
-### Paraphrasing
+#### Paraphrasing
 
 There are two variants of the noun-compound paraphrasing task:
 
