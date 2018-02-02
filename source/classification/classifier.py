@@ -4,7 +4,7 @@ ap = argparse.ArgumentParser()
 ap.add_argument('--nepochs', help='number of epochs', type=int, default=20)
 ap.add_argument('--patience', help='how many epochs to wait without improvement', type=int, default=3)
 ap.add_argument('--w1_w2_embeddings', help='word embeddings to be used for the constituent words', default=None)
-ap.add_argument('--paraphras_matrix', help='the path to the paraphrase matrix', default=None)
+ap.add_argument('--paraphrase_matrix', help='the path to the paraphrase matrix', default=None)
 ap.add_argument('dataset_prefix', help='path to the train/test/val/rel data')
 ap.add_argument('model_dir', help='where to store the result')
 args = ap.parse_args()
@@ -32,8 +32,8 @@ import codecs
 
 import numpy as np
 
+from sklearn.svm import LinearSVC
 from sklearn.externals import joblib
-from sklearn.svm import SVC, LinearSVC
 from sklearn.linear_model import LogisticRegression
 
 from dataset_reader import DatasetReader
@@ -86,7 +86,7 @@ def main():
     logger.info('Classifying...')
     reg_values = [(i + 1) * 0.05 for i in range(10)]
     penalties = ['l1', 'l2']
-    classifiers = ['logistic', 'svm', 'svm-rbf']
+    classifiers = ['logistic', 'svm']
     f1_results = []
     descriptions = []
     models = []
@@ -94,18 +94,15 @@ def main():
     for cls in classifiers:
         curr_reg_values = [0.0] if cls == 'svm' else reg_values
         for reg_c in curr_reg_values:
-            curr_penalties = [0.0] if cls == 'svm-rbf' else penalties
-            for penalty in curr_penalties:
+            for penalty in penalties:
                 descriptions.append('Classifier: {}, Penalty: {}, C: {:.2f}'.format(cls, penalty, reg_c))
 
                 # Create the classifier
                 try:
                     if cls == 'logistic':
                         classifier = LogisticRegression(penalty=penalty, C=reg_c)
-                    elif cls == 'svm':
-                        classifier = LinearSVC(penalty=penalty, dual=False)
                     else:
-                        classifier = SVC(C=reg_c, kernel='rbf')
+                        classifier = LinearSVC(penalty=penalty, dual=False)
 
                     logger.info('Training with classifier: {}, penalty: {}, c: {:.2f}...'.format(cls, penalty, reg_c))
                     classifier.fit(train_instances, train_set.labels)

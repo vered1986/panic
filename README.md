@@ -117,7 +117,7 @@ and the regularization types and values. The models differ by:
 ```
 usage: classifier.py [-h] [--nepochs NEPOCHS] [--patience PATIENCE]
                      [--w1_w2_embeddings W1_W2_EMBEDDINGS]
-                     [--paraphras_matrix PARAPHRAS_MATRIX]
+                     [--paraphrase_matrix PARAPHRASE_MATRIX]
                      dataset_prefix model_dir
 
 positional arguments:
@@ -130,7 +130,7 @@ optional arguments:
   --patience PATIENCE   how many epochs to wait without improvement
   --w1_w2_embeddings W1_W2_EMBEDDINGS
                         word embeddings to be used for the constituent words
-  --paraphras_matrix PARAPHRAS_MATRIX
+  --paraphrase_matrix PARAPHRASE_MATRIX
                         the path to the paraphrase matrix
 
 ```
