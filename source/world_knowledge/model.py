@@ -292,6 +292,7 @@ class Model:
         # Load the predicate file
         with codecs.open(model_file_prefix + '/index2pred.json', 'r', 'utf-8') as f_in:
             index2pred = json.load(f_in)
+            index2pred = [tuple(p) for p in index2pred]
 
         classifier = Model(wv, index2pred)
         classifier.predicate_matrix = np.load(model_file_prefix + '/predicates.npy')

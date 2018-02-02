@@ -4,9 +4,8 @@ ap = argparse.ArgumentParser()
 ap.add_argument('--nepochs', help='number of epochs', type=int, default=20)
 ap.add_argument('--patience', help='how many epochs to wait without improvement', type=int, default=3)
 ap.add_argument('--w1_w2_embeddings', help='word embeddings to be used for the constituent words', default=None)
-ap.add_argument('--predicate_prediction_embeddings', help='word embeddings to be used for world knowledge', default=None)
+ap.add_argument('--paraphras_matrix', help='the path to the paraphrase matrix', default=None)
 ap.add_argument('dataset_prefix', help='path to the train/test/val/rel data')
-ap.add_argument('world_knowledge_model_dir', help='the path to the world knowledge model')
 ap.add_argument('model_dir', help='where to store the result')
 args = ap.parse_args()
 
@@ -29,25 +28,22 @@ logger.setLevel(logging.DEBUG)
 import sys
 sys.path.append('../')
 
+import codecs
+
 import numpy as np
 
 from sklearn.externals import joblib
 from sklearn.svm import SVC, LinearSVC
 from sklearn.linear_model import LogisticRegression
 
-from world_knowledge.model import Model
 from dataset_reader import DatasetReader
 from common import load_binary_embeddings
 from evaluation_common import evaluate, output_predictions
 
 
 def main():
-    if args.predicate_prediction_embeddings is None and args.w1_w2_embeddings is None:
-        raise ValueError('At least one of "predicate_prediction_embeddings" or "w1_w2_embeddings" should be set.')
-
-    if args.predicate_prediction_embeddings is not None:
-        logger.info('Reading word embeddings from {}...'.format(args.predicate_prediction_embeddings))
-        p_wv, words = load_binary_embeddings(args.predicate_prediction_embeddings)
+    if args.paraphras_matrix is None and args.w1_w2_embeddings is None:
+        raise ValueError('At least one of "paraphras_matrix" or "w1_w2_embeddings" should be set.')
 
     if args.w1_w2_embeddings is not None:
         logger.info('Reading word embeddings from {}...'.format(args.w1_w2_embeddings))
@@ -65,11 +61,17 @@ def main():
     logger.info('Generating feature vectors...')
     train_features, val_features, test_features = [], [], []
 
-    if args.predicate_prediction_embeddings is not None:
-        wk_model = Model.load_model(args.world_knowledge_model_dir + '/best', p_wv, update_embeddings=False)
-        train_features.append([wk_model.predict_predicate(w1, w2) for (w1, w2) in train_set.noun_compounds])
-        val_features.append([wk_model.predict_predicate(w1, w2) for (w1, w2) in val_set.noun_compounds])
-        test_features.append([wk_model.predict_predicate(w1, w2) for (w1, w2) in test_set.noun_compounds])
+    if args.paraphras_matrix is not None:
+        noun_compounds_file = args.paraphras_matrix.replace('_paraphrase_matrix.npy', '.tsv')
+        with codecs.open(noun_compounds_file, 'r', 'utf-8') as f_in:
+            noun_compounds = [tuple(line.strip().split('\t')) for line in f_in]
+        nc2index = { i : nc for i, nc in enumerate(noun_compounds) }
+
+        paraphrase_matrix = np.load(args.paraphras_matrix)
+
+        train_features.append([paraphrase_matrix[nc2index[(w1, w2)], :] for (w1, w2) in train_set.str_noun_compounds])
+        val_features.append([paraphrase_matrix[nc2index[(w1, w2)], :] for (w1, w2) in val_set.str_noun_compounds])
+        test_features.append([paraphrase_matrix[nc2index[(w1, w2)], :] for (w1, w2) in test_set.str_noun_compounds])
 
     if args.w1_w2_embeddings is not None:
         train_features.append([np.concatenate([w_wv[w1, :], w_wv[w2, :]]) for (w1, w2) in train_set.noun_compounds])
