@@ -41,16 +41,22 @@ def main():
     for (w1, w2) in tqdm.tqdm(noun_compounds):
         w1_index, w2_index = word2index.get(w1, -1), word2index.get(w2, -1)
         if w1_index > 0 and w2_index > 0:
-            curr_vector = np.concatenate([wk_model.predict_predicate(w1_index, w2_index),
-                                          wk_model.predict_predicate(w2_index, w1_index)])
+            vectors.append(wk_model.predict_predicate(w1_index, w2_index))
+            vectors.append(wk_model.predict_predicate(w2_index, w1_index))
         else:
-            curr_vector = np.zeros(wv.shape[1] * 4)
-
-        vectors.append(curr_vector)
+            vectors.append(np.zeros(wv.shape[1] * 2))
+            vectors.append(np.zeros(wv.shape[1] * 2))
 
     out_file = args.noun_compounds_file.replace('.tsv', '') + '_paraphrase_matrix'
     logger.info('Saving matrix to {}.npy'.format(out_file))
     np.save(out_file, np.vstack(vectors))
+
+    # Save the noun compound to index mapping
+    with codecs.open(args.noun_compounds_file.replace('.tsv', '_nc.tsv'), 'w', 'utf-8') as f_out:
+        noun_compounds = [[(w1, w2), (w2, w1)] for (w1, w2) in noun_compounds]
+        noun_compounds = [nc for nc_list in noun_compounds for nc in nc_list]
+        for nc in noun_compounds:
+            f_out.write('\t'.join(nc) + '\n')
 
 
 if __name__ == '__main__':

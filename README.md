@@ -115,8 +115,7 @@ and the regularization types and values. The models differ by:
 * Integrated - a concatenation of both feature vectors detailed above.  
 
 ```
-usage: classifier.py [-h] [--nepochs NEPOCHS] [--patience PATIENCE]
-                     [--w1_w2_embeddings W1_W2_EMBEDDINGS]
+usage: classifier.py [-h] [--w1_w2_embeddings W1_W2_EMBEDDINGS]
                      [--paraphrase_matrix PARAPHRASE_MATRIX]
                      dataset_prefix model_dir
 
@@ -126,8 +125,6 @@ positional arguments:
 
 optional arguments:
   -h, --help            show this help message and exit
-  --nepochs NEPOCHS     number of epochs
-  --patience PATIENCE   how many epochs to wait without improvement
   --w1_w2_embeddings W1_W2_EMBEDDINGS
                         word embeddings to be used for the constituent words
   --paraphrase_matrix PARAPHRASE_MATRIX

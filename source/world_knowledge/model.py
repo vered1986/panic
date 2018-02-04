@@ -110,7 +110,8 @@ class Model:
         dy.renew_cg()
         W1 = dy.parameter(self.model_parameters['W1'])
         w2_vec = self.lookup(w2)
-        pred_vec = self.__compute_predicate_vector__(predicate)
+        # pred_vec = self.__compute_predicate_vector__(predicate)
+        pred_vec = self.__compute_predicate_vector__(predicate)[self.embeddings_dim:] # backward
         w1_index = np.argmax(dy.softmax(self.__predict_w1__(W1, pred_vec, w2_vec)).npvalue())
         return self.lookup(w1_index).npvalue()
 
@@ -124,7 +125,8 @@ class Model:
         dy.renew_cg()
         W2 = dy.parameter(self.model_parameters['W2'])
         w1_vec = self.lookup(w1)
-        pred_vec = self.__compute_predicate_vector__(predicate)
+        pred_vec = self.__compute_predicate_vector__(predicate)[:self.embeddings_dim] # forward
+        #  pred_vec = self.__compute_predicate_vector__(predicate)
         w2_index = np.argmax(dy.softmax(self.__predict_w2__(W2, pred_vec, w1_vec)).npvalue())
         return self.lookup(w2_index).npvalue()
 
@@ -274,7 +276,8 @@ class Model:
         self.model_parameters['word_lookup'] = self.model.lookup_parameters_from_numpy(self.wv)
 
         # Predict w1 from w2 and the predicate
-        input_dim = self.embeddings_dim + self.lstm_out_dim
+        # input_dim = self.embeddings_dim + self.lstm_out_dim
+        input_dim = self.embeddings_dim + self.lstm_out_dim // 2
         output_dim = self.wv.shape[0] # vocabulary size
         self.model_parameters['W1'] = self.model.add_parameters((output_dim, input_dim))
         self.model_parameters['W2'] = self.model.add_parameters((output_dim, input_dim))
