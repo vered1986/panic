@@ -3,6 +3,8 @@ import logging
 
 import numpy as np
 
+from sklearn import metrics
+
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 logger.setLevel(logging.DEBUG)
 
@@ -57,7 +59,9 @@ def most_similar_words_with_scores(word_embeddings, vector, k):
     :return: the k most similar vectors to vector, along with their cosine similarity scores
     """
     # Apply matrix-vector dot product to get the distances of w from all the other vectors
-    similarity = np.dot(word_embeddings, vector.T)
+    # similarity = np.dot(word_embeddings, vector.T)
+    similarity = metrics.pairwise.cosine_similarity(word_embeddings, vector[:,np.newaxis].T)
+    similarity = np.squeeze(similarity, axis=1)
 
     # Get the top k vectors
     indices = (-similarity).argsort()[:k + 1]
