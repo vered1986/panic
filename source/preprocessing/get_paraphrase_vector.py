@@ -2,7 +2,7 @@
 import argparse
 ap = argparse.ArgumentParser()
 ap.add_argument('noun_compounds_file', help='path to a tsv file with noun-compounds')
-ap.add_argument('world_knowledge_model_dir', help='the path to the world knowledge model')
+ap.add_argument('open_ie_lm_model_dir', help='the path to the world knowledge model')
 ap.add_argument('word_embeddings', help='word embeddings to be used for world knowledge')
 args = ap.parse_args()
 
@@ -19,7 +19,7 @@ import codecs
 
 import numpy as np
 
-from world_knowledge.model import Model
+from open_ie_lm.model import Model
 from common import load_binary_embeddings
 
 
@@ -31,21 +31,33 @@ def main():
     logger.info('Reading word embeddings from {}...'.format(args.word_embeddings))
     wv, words = load_binary_embeddings(args.word_embeddings)
     word2index = {w: i for i, w in enumerate(words)}
+    UNK = word2index['unk']
 
-    logger.info('Loading world knowledge model from {}...'.format(args.world_knowledge_model_dir))
-    wk_model = Model.load_model(args.world_knowledge_model_dir + '/best', wv, update_embeddings=False)
+    logger.info('Loading world knowledge model from {}...'.format(args.open_ie_lm_model_dir))
+    wk_model = Model.load_model(args.open_ie_lm_model_dir, wv, update_embeddings=False)
     logger.info('Predicting predicates...')
 
     vectors = []
 
     for (w1, w2) in tqdm.tqdm(noun_compounds):
-        w1_index, w2_index = word2index.get(w1, -1), word2index.get(w2, -1)
-        if w1_index > 0 and w2_index > 0:
-            vectors.append(wk_model.predict_predicate(w1_index, w2_index))
-            vectors.append(wk_model.predict_predicate(w2_index, w1_index))
-        else:
-            vectors.append(np.zeros(wv.shape[1] * 2))
-            vectors.append(np.zeros(wv.shape[1] * 2))
+        for first, second in [(w1, w2), (w2, w1)]:
+            first_index, second_index = word2index.get(first, UNK), word2index.get(second, UNK)
+
+            # Returns the top k predicted paraphrase vectors for (first, second)
+            predicated_predicates = wk_model.predict_predicate(first_index, second_index, k=int(args.k))
+
+            # Remove "unrelated" paraphrases if found enough related ones with higher scores
+            pred_indices, pred_vecs, scores = zip(*predicated_predicates)
+            paraphrases = [' '.join([words[i] for i in wk_model.index2pred[pred_index]])
+                           for pred_index in pred_indices]
+            if 'unrelated to' in paraphrases[0] and scores[0] > scores[1] * 2:
+                curr_par_vector = pred_vecs[0]
+
+            else:
+                pred_indices, pred_vecs, scores = zip(*predicated_predicates[1:])
+                curr_par_vector = np.average(pred_vecs, weights=scores)
+
+            vectors.append(curr_par_vector)
 
     out_file = args.noun_compounds_file.replace('.tsv', '') + '_paraphrase_matrix'
     logger.info('Saving matrix to {}.npy'.format(out_file))

@@ -16,7 +16,8 @@ DISPLAY_FREQ = 1000
 
 
 class Model:
-    def __init__(self, wv, index2pred, model_dir=None, n_epochs=10, minibatch_size=100, patience=5, update_embeddings=False):
+    def __init__(self, wv, index2pred, model_dir=None, n_epochs=10, minibatch_size=100, patience=5,
+                 update_embeddings=False):
         """
         Initialize the model
         :param wv: pre-trained word embedding vectors
@@ -45,25 +46,52 @@ class Model:
         if model_dir is not None:
             if not os.path.exists(model_dir):
                 os.mkdir(model_dir)
-            if not os.path.exists(model_dir + '/best'):
-                os.mkdir(model_dir + '/best')
 
         # Create the network
         logger.info('Creating the model...')
         self.__create_computation_graph__()
 
-    def fit(self, train_set):
+    def fit(self, train_set, val_set):
         """
         Train the model
         """
+        def validation_function():
+            """
+            Compute the loss on the validation set
+            :return: the loss on the validation set
+            """
+            losses = []
+
+            for minibatch in [val_set[i:i + self.minibatch_size]
+                              for i in range(0, len(val_set), self.minibatch_size)]:
+                dy.renew_cg()
+                W1, W2, W_p = dy.parameter(self.model_parameters['W1']), \
+                              dy.parameter(self.model_parameters['W2']), \
+                              dy.parameter(self.model_parameters['W_p'])
+                _, pred_batch_loss, w1_batch_loss, w2_batch_loss = self.__compute_batch_loss__(
+                    W1, W2, W_p, minibatch)
+                losses.append((pred_batch_loss, w1_batch_loss, w2_batch_loss))
+
+            w1_batch_loss, w2_batch_loss, pred_batch_loss = zip(*losses)
+            w1_batch_loss = np.sum(w1_batch_loss) / len(val_set)
+            w2_batch_loss = np.sum(w2_batch_loss) / len(val_set)
+            pred_batch_loss = np.sum(pred_batch_loss) / len(val_set)
+            batch_loss = (w1_batch_loss + w2_batch_loss + pred_batch_loss)
+            logger.info('Validation: Loss: [w1={:.3f}, w2={:.3f}, predicate={:.3f}, total={:.3f}]'.
+                        format(w1_batch_loss, w2_batch_loss, pred_batch_loss, batch_loss))
+            return batch_loss
+
         logger.info('Training the model...')
-        self.__train__(train_set)
+        self.__train__(train_set, validation_function)
         logger.info('Training is done!')
 
     def save_model(self, output_prefix, predicate_matrix=True):
         """
         Save the trained model to a file
         """
+        if not os.path.exists(output_prefix):
+            os.mkdir(output_prefix)
+
         save_to = output_prefix + '/model'
 
         self.model_parameters['W1'].save(save_to, '/W1')
@@ -98,37 +126,38 @@ class Model:
         np.save(filename, self.predicate_matrix)
         return self.predicate_matrix
 
-    def predict_w1(self, w2, predicate):
+    def predict_w1(self, w2, predicate, k=10):
         """
         Predict the word w1 given w2 and the predicate
         :param w2: the index of w2
         :param predicate: a list of word indices in the predicate
         :param k: the number of most suited w1s to return
         :param vocab: limited vocabulary to predict from
-        :return the possible indices of w1
+        :return the possible vectors of w1
         """
         dy.renew_cg()
         W1 = dy.parameter(self.model_parameters['W1'])
         w2_vec = self.lookup(w2)
-        # pred_vec = self.__compute_predicate_vector__(predicate)
-        pred_vec = self.__compute_predicate_vector__(predicate)[self.embeddings_dim:] # backward
-        w1_index = np.argmax(dy.softmax(self.__predict_w1__(W1, pred_vec, w2_vec)).npvalue())
-        return self.lookup(w1_index).npvalue()
+        pred_vec = self.__compute_predicate_vector__(predicate)
+        distribution = dy.softmax(self.__predict_w1__(W1, pred_vec, w2_vec)).npvalue()
+        best_w1_indices = distribution.argsort()[-k:][::-1]
+        return [(w1_index, self.lookup(w1_index).npvalue(), distribution[w1_index]) for w1_index in best_w1_indices]
 
-    def predict_w2(self, w1, predicate):
+    def predict_w2(self, w1, predicate, k=10):
         """
         Predict the word w2 given w1 and the predicate
         :param w1: the index of w1
-        :param w2: the index of w2
-        :return the vector of w1
+        :param predicate: a list of word indices in the predicate
+        :param k: the number of most suited w2s to return
+        :return the possible vectors of w2
         """
         dy.renew_cg()
         W2 = dy.parameter(self.model_parameters['W2'])
         w1_vec = self.lookup(w1)
-        pred_vec = self.__compute_predicate_vector__(predicate)[:self.embeddings_dim] # forward
-        #  pred_vec = self.__compute_predicate_vector__(predicate)
-        w2_index = np.argmax(dy.softmax(self.__predict_w2__(W2, pred_vec, w1_vec)).npvalue())
-        return self.lookup(w2_index).npvalue()
+        pred_vec = self.__compute_predicate_vector__(predicate)
+        distribution = dy.softmax(self.__predict_w2__(W2, pred_vec, w1_vec)).npvalue()
+        best_w2_indices = distribution.argsort()[-k:][::-1]
+        return [(w2_index, self.lookup(w2_index).npvalue(), distribution[w2_index]) for w2_index in best_w2_indices]
 
     def __compute_predicate_vector__(self, predicate):
         """
@@ -140,18 +169,21 @@ class Model:
         pred_vec = self.builder.transduce(pred_words)[-1]
         return pred_vec
 
-    def predict_predicate(self, w1, w2):
+    def predict_predicate(self, w1, w2, k=10):
         """
         Predict the predicate given the words w1 and w2
         :param w1: the index of w1
         :param w2: the index of w2
-        :return the vector of the predicted predicate
+        :param k: the number of predicates to return
+        :return the vectors of the predicted predicate
         """
         dy.renew_cg()
         W_p = dy.parameter(self.model_parameters['W_p'])
         w1_vec, w2_vec = self.lookup(w1), self.lookup(w2)
-        pred_index = np.argmax(dy.softmax(self.__predict_predicate__(W_p, w1_vec, w2_vec)).npvalue())
-        return self.__compute_predicate_vector__(self.index2pred[pred_index]).npvalue()
+        distribution = dy.softmax(self.__predict_predicate__(W_p, w1_vec, w2_vec)).npvalue()
+        best_pred_indices = distribution.argsort()[-k:][::-1]
+        return [(pred_index, self.__compute_predicate_vector__(self.index2pred[pred_index]).npvalue(),
+                 distribution[pred_index]) for pred_index in best_pred_indices]
 
     def __predict_w1__(self, W_w_1, pred_vec, w2_vec):
         """
@@ -161,7 +193,7 @@ class Model:
         :param pred_vec: the predicate vector
         :return a vector representing the predicted w1
         """
-        return W_w_1 * dy.concatenate([pred_vec, w2_vec])
+        return W_w_1 * dy.concatenate([pred_vec[:self.embeddings_dim], w2_vec])
 
     def __predict_w2__(self, W_w_1, pred_vec, w1_vec):
         """
@@ -171,7 +203,7 @@ class Model:
         :param pred_words: a list of word indices in the predicate
         :return a vector representing the predicted w2
         """
-        return W_w_1 * dy.concatenate([pred_vec, w1_vec])
+        return W_w_1 * dy.concatenate([pred_vec[self.embeddings_dim:], w1_vec])
 
     def __predict_predicate__(self, W_p, w1_vec, w2_vec):
         """
@@ -181,16 +213,17 @@ class Model:
         :param w2_vec: the index of w2
         :return a vector representing the predicted predicate
         """
-        return W_p * dy.concatenate([w2_vec, w1_vec])
+        return W_p * dy.concatenate([w1_vec, w2_vec])
 
-    def __train__(self, train_set):
+    def __train__(self, train_set, validation_function):
         """
         Train the model
         :param train_set: tuples of (arg1, predicate, arg2)
+        :param validation_function: returns the validation set result
         """
         trainer = dy.MomentumSGDTrainer(self.model)
         logger.info('Training with len(train) = {}'.format(len(train_set)))
-        prev_loss = np.infty
+        best_val_loss = np.infty
         patience_count = 0
 
         for epoch in range(self.n_epochs):
@@ -204,31 +237,13 @@ class Model:
             for minibatch in range(nminibatches):
                 dy.renew_cg()
                 W1, W2, W_p = dy.parameter(self.model_parameters['W1']), \
-                                    dy.parameter(self.model_parameters['W2']), \
-                                    dy.parameter(self.model_parameters['W_p'])
+                              dy.parameter(self.model_parameters['W2']), \
+                              dy.parameter(self.model_parameters['W_p'])
 
                 batch_indices = epoch_indices[minibatch_size * minibatch:minibatch_size * (minibatch + 1)]
                 batch_instances = [train_set[i] for i in batch_indices]
-                w1_losses, w2_losses, pred_losses = [], [], []
-
-                for w1, predicate, w2 in batch_instances:
-                    w1_vec, w2_vec = self.lookup(w1), self.lookup(w2)
-                    pred_vec = self.__compute_predicate_vector__(predicate)
-
-                    # Predict w1, w2 and the predicate from each other
-                    w1_p = self.__predict_w1__(W1, pred_vec, w2_vec)
-                    w2_p = self.__predict_w2__(W2, pred_vec, w1_vec)
-                    pred_p = self.__predict_predicate__(W_p, w1_vec, w2_vec)
-
-                    w1_losses.append(dy.pickneglogsoftmax(w1_p, w1))
-                    w2_losses.append(dy.pickneglogsoftmax(w2_p, w2))
-                    pred_losses.append(dy.pickneglogsoftmax(pred_p, self.pred2index[predicate]))
-
-                w1_loss, w2_loss, pred_loss = dy.esum(w1_losses), dy.esum(w2_losses), dy.esum(pred_losses)
-                loss = dy.esum([w1_loss, w2_loss, pred_loss])
-                w1_batch_loss = w1_loss.value() / len(batch_instances)
-                w2_batch_loss = w2_loss.value() / len(batch_instances)
-                pred_batch_loss = pred_loss.value() / len(batch_instances)
+                loss, pred_batch_loss, w1_batch_loss, w2_batch_loss = self.__compute_batch_loss__(
+                    W1, W2, W_p, batch_instances)
                 batch_loss = w1_batch_loss + w2_batch_loss + pred_batch_loss
 
                 if (minibatch + 1) % DISPLAY_FREQ == 0:
@@ -246,12 +261,13 @@ class Model:
             logger.info('Epoch {}/{}, Loss: {}'.format((epoch + 1), self.n_epochs, total_loss))
 
             # Early stopping
-            if prev_loss > total_loss:
+            curr_val_loss = validation_function()
+            if best_val_loss >= curr_val_loss:
                 patience_count = 0
-                prev_loss = total_loss
+                best_val_loss = curr_val_loss
 
                 # Save the best model
-                save_to = self.model_dir + '/best'
+                save_to = self.model_dir + '/{}'.format(epoch + 1)
                 logger.info('Saving best model trained so far to {}'.format(save_to))
                 self.save_model(save_to)
             else:
@@ -260,6 +276,38 @@ class Model:
             if patience_count == self.patience:
                 logger.info('Lost patience, stopping training')
                 break
+
+    def __compute_batch_loss__(self, W1, W2, W_p, batch_instances):
+        """
+        Predict the instances in the current batch and return the losses
+        :param W1: the parameter
+        :param W2: the parameter
+        :param W_p: the parameter
+        :param batch_instances:
+        :return: loss (expression, total), pred_batch_loss, w1_batch_loss, w2_batch_loss (floats)
+        """
+        w1_losses, w2_losses, pred_losses = [], [], []
+
+        for w1, predicate, w2 in batch_instances:
+            w1_vec, w2_vec = self.lookup(w1), self.lookup(w2)
+            pred_vec = self.__compute_predicate_vector__(predicate)
+
+            # Predict w1, w2 and the predicate from each other
+            w1_p = self.__predict_w1__(W1, pred_vec, w2_vec)
+            w2_p = self.__predict_w2__(W2, pred_vec, w1_vec)
+            pred_p = self.__predict_predicate__(W_p, w1_vec, w2_vec)
+
+            w1_losses.append(dy.pickneglogsoftmax(w1_p, w1))
+            w2_losses.append(dy.pickneglogsoftmax(w2_p, w2))
+            pred_losses.append(dy.pickneglogsoftmax(pred_p, self.pred2index[predicate]))
+
+        w1_loss, w2_loss, pred_loss = dy.esum(w1_losses), dy.esum(w2_losses), dy.esum(pred_losses)
+        loss = dy.esum([w1_loss, w2_loss, pred_loss])
+        w1_batch_loss = w1_loss.value() / len(batch_instances)
+        w2_batch_loss = w2_loss.value() / len(batch_instances)
+        pred_batch_loss = pred_loss.value() / len(batch_instances)
+
+        return loss, pred_batch_loss, w1_batch_loss, w2_batch_loss
 
     def __create_computation_graph__(self):
         """

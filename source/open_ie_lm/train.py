@@ -8,7 +8,7 @@ ap.add_argument('--nepochs', help='number of epochs', type=int, default=10)
 ap.add_argument('--batch_size', help='number of instance per minibatch', type=int, default=10)
 ap.add_argument('--patience', help='how many epochs to wait without improvement', type=int, default=3)
 ap.add_argument('--update', help='whether to update the embeddings', action='store_true')
-ap.add_argument('--negative_sampling', help='whether to add negative samples of unrelated words', action='store_true')
+ap.add_argument('--negative_sampling_ratio', help='the ratio from the training set of negative samples to add', type=float, default='0.0')
 ap.add_argument('--continue_training', help='whether to load and keep training an existing model', action='store_true')
 ap.add_argument('dataset', help='path to the training data')
 ap.add_argument('model_dir', help='where to store the result')
@@ -39,10 +39,12 @@ import sys
 sys.path.append('../')
 
 import tqdm
-import codecs
 import random
+import codecs
 
 import numpy as np
+
+from collections import defaultdict
 
 from model import Model
 from common import load_binary_embeddings, most_similar_words
@@ -62,14 +64,35 @@ def main():
             train_set.append(line.strip().split('\t'))
 
     # Add negative samples
-    if args.negative_sampling:
+    if args.negative_sampling_ratio > 0:
         logger.info('Adding negative samples...')
-        num_negative = len(train_set) // 3
-        vocab = list(set([w1 for (w1, pred, w2) in train_set]).union(set([w2 for (w1, pred, w2) in train_set])))
+        ratio = min(args.negative_sampling_ratio, 1.0)
+        w1_num_negative = w2_num_negative = pred_num_negative = int((len(train_set) * ratio) / 3)
+
+        preds_for_w2 = defaultdict(set)
+        [preds_for_w2[w2].add(pred) for (w1, pred, w2) in train_set]
+        w1_negatives = [('unk', pred, w2)
+                        for (_, pred, _), (_, _, w2)
+                        in zip(random.sample(train_set, w1_num_negative),
+                               random.sample(train_set, w1_num_negative))
+                        if pred not in preds_for_w2[w2]]
+
+        preds_for_w1 = defaultdict(set)
+        [preds_for_w1[w1].add(pred) for (w1, pred, w2) in train_set]
+        w2_negatives = [(w1, pred, 'unk')
+                        for (_, pred, _), (w1, _, _)
+                        in zip(random.sample(train_set, w2_num_negative),
+                               random.sample(train_set, w2_num_negative))
+                        if pred not in preds_for_w1[w1]]
+
         related_pairs = set([(w1, w2) for (w1, pred, w2) in train_set])
-        pairs = zip(np.random.choice(vocab, num_negative), np.random.choice(vocab, num_negative))
-        negative_samples = [(w1, 'be unrelated to', w2) for (w1, w2) in pairs if w1 != w2
-                            and (w1, w2) not in related_pairs]
+        pred_negatives = [(w1, 'is unrelated to', w2)
+                          for (w1, _, _), (_, _, w2)
+                          in zip(random.sample(train_set, pred_num_negative),
+                                 random.sample(train_set, pred_num_negative))
+                          if (w1, w2) not in related_pairs]
+
+        negative_samples = w1_negatives + w2_negatives + pred_negatives
         logger.info('Added {} negative samples...'.format(len(negative_samples)))
         train_set += negative_samples
 
@@ -83,44 +106,53 @@ def main():
     # Create the model
     if args.continue_training:
         logger.info('Continuing previous training.')
-        model = Model.load_model(args.model_dir + '/best', wv, update_embeddings=args.update)
+        model = Model.load_model(args.model_dir, wv, update_embeddings=args.update)
         model.model_dir = args.model_dir
         model.n_epochs=args.nepochs
         model.minibatch_size=args.batch_size
         model.patience=args.patience
     else:
-        model = Model(wv, index2pred, model_dir=args.model_dir, n_epochs=args.nepochs, update_embeddings=args.update,
+        model = Model(wv, index2pred, model_dir=args.model_dir, n_epochs=args.nepochs,
+                      update_embeddings=args.update,
                       minibatch_size=args.batch_size, patience=args.patience)
 
+    # Dedicate a random small part from the train set to validation
+    random.shuffle(train_set)
+    val_set = train_set[-1000:]
+    train_set = train_set[:-1000]
     logger.info('Training with the following arguments: {}'.format(args))
-    model.fit(train_set)
+    model.fit(train_set, val_set)
 
     # Try to predict some stuff (to be replaced with some kind of evaluation)
     logger.info('Evaluation:')
-    # oil be extracted from olives, company sell textile,  meeting be hold in paris
-    for (w1, pred) in [('oil', 'be extract from'), ('company', 'sell'), ('meeting', 'be hold in')]:
+    for (w1, pred) in [('oil', 'be extract from'), ('company', 'sell'), ('meeting', 'be hold in'), ('cup', 'sell')]:
         w1_index = word2index.get(w1, -1)
         pred_indices = [word2index.get(w, -1) for w in pred.split()]
-        w2_p = model.predict_w2(w1_index, pred_indices)
-        w2_indices = most_similar_words(wv, w2_p, k=10)
-        for w2_index in w2_indices:
-            logger.info('{} {} [{}]'.format(w1, pred, words[w2_index]))
+        for (w2_index, w2_p, score) in model.predict_w2(w1_index, pred_indices, k=10):
+            logger.info('{} {} [{}]\t{:.3f}'.format(w1, pred, words[w2_index], score))
+        logger.info('')
 
     for (w2, pred) in [('olive', 'be extract from'), ('textile', 'sell'), ('paris', 'be hold in')]:
         w2_index = word2index.get(w2, -1)
         pred_indices = [word2index.get(w, -1) for w in pred.split()]
-        w1_p = model.predict_w1(w2_index, pred_indices)
-        w1_indices = most_similar_words(wv, w1_p, k=10)
-        for w1_index in w1_indices:
-            logger.info('[{}] {} {}'.format(words[w1_index], pred, w2))
+        for (w1_index, w1_p, score) in model.predict_w1(w2_index, pred_indices, k=10):
+            logger.info('[{}] {} {}\t{:.3f}'.format(words[w1_index], pred, w2, score))
+        logger.info('')
 
     for (w1, w2) in [('oil', 'olive'), ('company', 'textile'), ('meeting', 'paris')]:
         w1_index = word2index.get(w1, -1)
         w2_index = word2index.get(w2, -1)
-        pred_p = model.predict_predicate(w1_index, w2_index)
-        pred_indices = most_similar_words(model.predicate_matrix, pred_p, k=10)
-        for pred_index in pred_indices:
-            logger.info('{} [{}] {}'.format(w1, ' '.join([words[i] for i in index2pred[pred_index]]), w2))
+
+        for (pred_index, pred_p, score) in model.predict_predicate(w1_index, w2_index, k=10):
+            pred_text = ' '.join([words[i] for i in model.index2pred[pred_index]])
+            logger.info('{} [{}] {}\t{:.3f}'.format(w1, pred_text, w2, score))
+        logger.info('')
+
+        for (pred_index, pred_p, score) in model.predict_predicate(w2_index, w1_index, k=10):
+            pred_text = ' '.join([words[i] for i in model.index2pred[pred_index]])
+            logger.info('{} [{}] {}\t{:.3f}'.format(w2, pred_text, w1, score))
+        logger.info('')
+        logger.info('')
 
 
 if __name__ == '__main__':
