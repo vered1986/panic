@@ -2,9 +2,10 @@
 import argparse
 ap = argparse.ArgumentParser()
 ap.add_argument('noun_compounds_file', help='path to a tsv file with noun-compounds')
-ap.add_argument('world_knowledge_model_dir', help='the path to the world knowledge model')
+ap.add_argument('open_ie_lm_model_dir', help='the path to the world knowledge model')
 ap.add_argument('word_embeddings', help='word embeddings to be used for world knowledge')
 ap.add_argument('--k', help='the number of similar paraphrases (in each direction). default = 15', default=15, type=int)
+ap.add_argument('--unrelated_threshold', help='the minimal score the "is unrelated to" paraphrase has to get to be included', default=0.1)
 args = ap.parse_args()
 
 import logging
@@ -14,12 +15,13 @@ logger.setLevel(logging.INFO)
 
 import sys
 sys.path.append('../')
+sys.path.append('../../source')
 
 import tqdm
 import json
 import codecs
 
-from world_knowledge.model import Model
+from open_ie_lm.model import Model
 from common import load_binary_embeddings, most_similar_words_with_scores
 
 
@@ -31,9 +33,10 @@ def main():
     logger.info('Reading word embeddings from {}...'.format(args.word_embeddings))
     wv, words = load_binary_embeddings(args.word_embeddings)
     word2index = {w: i for i, w in enumerate(words)}
+    UNK = word2index['unk']
 
-    logger.info('Loading world knowledge model from {}...'.format(args.world_knowledge_model_dir))
-    wk_model = Model.load_model(args.world_knowledge_model_dir + '/best', wv, update_embeddings=False)
+    logger.info('Loading world knowledge model from {}...'.format(args.open_ie_lm_model_dir))
+    wk_model = Model.load_model(args.open_ie_lm_model_dir, wv, update_embeddings=False)
     logger.info('Predicting paraphrases...')
     paraphrases = {}
 
@@ -41,20 +44,27 @@ def main():
         curr_paraphrases = []
 
         for first, second in [(w1, w2), (w2, w1)]:
-            first_index, second_index = word2index.get(first, -1), word2index.get(second, -1)
-            if first_index > 0 and second_index > 0:
-                pred_p = wk_model.predict_predicate(first_index, second_index)
-                p_with_scores = most_similar_words_with_scores(wk_model.predicate_matrix, pred_p, k=int(args.k))
-                curr_paraphrases.extend([('{} {} {}'.format(first,
-                                                   ' '.join([words[i] for i in wk_model.index2pred[pred_index]]),
-                                                   second), score)
-                                 for (pred_index, score) in p_with_scores])
+            first_index, second_index = word2index.get(first, UNK), word2index.get(second, UNK)
 
-                # Remove "unrelated" paraphrases if found enough related ones with higher scores
-                curr_paraphrases = sorted(curr_paraphrases, key=lambda x : x[1], reverse=True)
-                best_paraphrases = curr_paraphrases[:int(args.k)//3]
-                if not any(['unrelated' in p for p, score in best_paraphrases]):
-                    curr_paraphrases = [(p, score) for (p, score) in curr_paraphrases if 'unrelated' not in p]
+            # Returns the top k predicted paraphrase vectors for (first, second)
+            pred_vectors = wk_model.predict_predicate(first_index, second_index, k=int(args.k))
+
+            p_with_scores = []
+            for (pred_index, pred_p, score) in pred_vectors:
+                par_indices = wk_model.index2pred[pred_index]
+                paraphrase = ' '.join([words[i] for i in par_indices])
+                p_with_scores.append((paraphrase, score))
+
+            curr_paraphrases.extend([('{} {} {}'.format(first, paraphrase, second), score)
+                                     for (paraphrase, score) in p_with_scores])
+
+            # Remove "unrelated" paraphrases if found enough related ones with higher scores
+            curr_paraphrases = sorted(curr_paraphrases, key=lambda x : x[1], reverse=True)
+
+            if curr_paraphrases[0][0] == 'is unrelated to' and curr_paraphrases[0][1] > args.unrelated_threshold:
+                curr_paraphrases = [(p, score) for (p, score) in curr_paraphrases if 'unrelated' in p]
+            else:
+                curr_paraphrases = [(p, score) for (p, score) in curr_paraphrases if 'unrelated' not in p]
 
         paraphrases[(w1, w2)] = curr_paraphrases
 
