@@ -41,7 +41,7 @@ from evaluation_common import evaluate, output_predictions
 
 def main():
     if args.paraphrase_matrix is None and args.w1_w2_embeddings is None:
-        raise ValueError('At least one of "paraphras_matrix" or "w1_w2_embeddings" should be set.')
+        raise ValueError('At least one of "paraphrase_matrix" or "w1_w2_embeddings" should be set.')
 
     word2index = { 'unk' : 0 }
     if args.w1_w2_embeddings is not None:
