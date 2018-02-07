@@ -1,7 +1,7 @@
 import random
 import numpy as np
 
-from source.world_knowledge.train import *
+from source.open_ie_lm.train import *
 
 np.random.seed(133)
 random.seed(a=133)
