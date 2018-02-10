@@ -9,16 +9,10 @@ ap.add_argument('--min_pred_occurrences', help='the required number of occurrenc
 ap.add_argument('--use_lemmas', help='whether to use the lemma form or the surface form of the predicate', action='store_true')
 args = ap.parse_args()
 
-import re
 import tqdm
-import spacy
 import codecs
 
 from collections import Counter
-
-nlp = spacy.load('en')
-
-three_alpha_chars = re.compile('[a-z]{3,}')
 
 
 def main():
@@ -26,10 +20,7 @@ def main():
         vocab = set([line.strip() for line in f_in])
 
     with codecs.open(args.nc_file, 'r', 'utf-8') as f_in:
-        ncs = [tuple(line.strip().split('\t')) for line in f_in]
-    w1s, w2s = zip(*ncs)
-    nc_vocab = set(w1s + w2s)
-    ncs = set(ncs)
+        ncs = set([tuple(line.strip().split('\t')) for line in f_in])
 
     with codecs.open(args.in_triplets_file, 'r', 'utf-8') as f_in:
         with codecs.open(args.out_triplets_file, 'w', 'utf-8', buffering=0) as f_out:
@@ -47,11 +38,9 @@ def main():
                     extraction = w1_surface, pred_surface, w2_surface
 
                 # Keep everything that connects two words from the list of noun-compounds
-                if w1.lower() in nc_vocab or w2.lower() in nc_vocab:
-                    if (w1.lower(), w2.lower()) in ncs or (w2.lower(), w1.lower()) in ncs:
-                        f_out.write('\t'.join(extraction).lower() + '\n')
-                    elif is_triplet_valid(vocab, extraction, w1_surface, w2_surface, pred_surface):
-                        f_out.write('\t'.join(extraction).lower() + '\n')
+                if ((w1.lower(), w2.lower()) in ncs or (w2.lower(), w1.lower()) in ncs) and \
+                        is_pattern_valid(vocab, extraction[1]):
+                    f_out.write('\t'.join(extraction).lower() + '\n')
 
     with codecs.open(args.out_triplets_file, 'r', 'utf-8') as f_in:
         extractions = [line.strip().split('\t') for line in f_in]
@@ -70,51 +59,28 @@ def main():
             f_out.write('\t'.join((w1, pred, w2)) + '\n')
 
 
-def is_triplet_valid(vocab, extraction, w1_surface, w2_surface, pred_surface):
-    w1, pred, w2 = extraction
-
-    # Take single words or two words that start with a determiner
-    w1_words, w2_words = w1.split(), w2.split()
-    correct_number_of_words = False
-    if len(w1_words) == 2 and (w1_words[0] == 'the' or w1_words[1] == 'a'):
-        w1 = w1_words[1]
-        w1_words = w1_words[:2]
-    elif len(w2_words) == 2 and (w2_words[0] == 'the' or w2_words[1] == 'a'):
-        w2 = w2_words[1]
-        w2_words = w2_words[:2]
-
-    if len(w1_words) == 1 and len(w2_words) == 1:
-        correct_number_of_words = True
-
-    if not correct_number_of_words:
+def is_pattern_valid(vocab, pattern):
+    """
+    Checks whether a pattern should be included
+    :param vocab: the general vocabulary (e.g. GloVe vocabulary)
+    :param pattern: the pattern to check
+    :return: a binary value indicating whether the pattern should be included
+    """
+    pattern_words = pattern.split()
+    if len(pattern_words) == 0:
         return False
 
-    if w1 == w2:
+    # Make sure all the words in the pattern are in the general vocabulary
+    if any([w not in vocab for w in pattern_words]):
         return False
 
-    # Remove negated triplets
-    if ' not ' in pred_surface or "n't" in pred_surface:
+    # Not a conjunction
+    if pattern_words[0] == 'and' or pattern_words[0] == 'or':
         return False
 
-    # Make sure all arguments and the words in the predicate are in the general vocabulary
-    if w1.lower() not in vocab or w2.lower() not in vocab:
+    # Not a negated pattern
+    if ' not ' in pattern_words or "n't" in pattern_words:
         return False
-
-    if any([w.lower() not in vocab for w in pred.split()]):
-        return False
-
-    for (w, w_surface) in [(w1.lower(), w1_surface), (w2.lower(), w2_surface)]:
-        if three_alpha_chars.match(w) is None:
-            return False
-
-        # Remove acronyms
-        if w_surface == w_surface.upper():
-            return False
-
-        # Remove proper names
-        w_token = [t for t in nlp(unicode(w_surface))][0]
-        if w_token.is_stop or w_token.pos_ != 'NOUN':
-            return False
 
     return True
 

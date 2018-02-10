@@ -31,6 +31,7 @@ class Model:
         self.wv = wv
         self.index2pred = index2pred
         self.pred2index = {p: i for i, p in enumerate(index2pred)}
+        self.curr_epoch = 0
         self.n_epochs = n_epochs
         self.embeddings_dim = wv.shape[1]
         self.minibatch_size = minibatch_size
@@ -61,10 +62,12 @@ class Model:
             :return: the loss on the validation set
             """
             losses = []
+            nminibatches = 0
 
             for minibatch in [val_set[i:i + self.minibatch_size]
                               for i in range(0, len(val_set), self.minibatch_size)]:
                 dy.renew_cg()
+                nminibatches += 1
                 W1, W2, W_p = dy.parameter(self.model_parameters['W1']), \
                               dy.parameter(self.model_parameters['W2']), \
                               dy.parameter(self.model_parameters['W_p'])
@@ -73,9 +76,9 @@ class Model:
                 losses.append((pred_batch_loss, w1_batch_loss, w2_batch_loss))
 
             w1_batch_loss, w2_batch_loss, pred_batch_loss = zip(*losses)
-            w1_batch_loss = np.sum(w1_batch_loss) / len(val_set)
-            w2_batch_loss = np.sum(w2_batch_loss) / len(val_set)
-            pred_batch_loss = np.sum(pred_batch_loss) / len(val_set)
+            w1_batch_loss = np.sum(w1_batch_loss) / nminibatches
+            w2_batch_loss = np.sum(w2_batch_loss) / nminibatches
+            pred_batch_loss = np.sum(pred_batch_loss) / nminibatches
             batch_loss = (w1_batch_loss + w2_batch_loss + pred_batch_loss)
             logger.info('Validation: Loss: [w1={:.3f}, w2={:.3f}, predicate={:.3f}, total={:.3f}]'.
                         format(w1_batch_loss, w2_batch_loss, pred_batch_loss, batch_loss))
@@ -226,7 +229,7 @@ class Model:
         best_val_loss = np.infty
         patience_count = 0
 
-        for epoch in range(self.n_epochs):
+        for epoch in range(self.curr_epoch, self.n_epochs + self.curr_epoch):
             total_loss = 0.0
             epoch_indices = np.random.permutation(len(train_set))
 
@@ -287,8 +290,10 @@ class Model:
         :return: loss (expression, total), pred_batch_loss, w1_batch_loss, w2_batch_loss (floats)
         """
         w1_losses, w2_losses, pred_losses = [], [], []
+        total_counts = 0.0
 
-        for w1, predicate, w2 in batch_instances:
+        for w1, predicate, w2, count in batch_instances:
+            total_counts += count
             w1_vec, w2_vec = self.lookup(w1), self.lookup(w2)
             pred_vec = self.__compute_predicate_vector__(predicate)
 
@@ -297,16 +302,15 @@ class Model:
             w2_p = self.__predict_w2__(W2, pred_vec, w1_vec)
             pred_p = self.__predict_predicate__(W_p, w1_vec, w2_vec)
 
-            w1_losses.append(dy.pickneglogsoftmax(w1_p, w1))
-            w2_losses.append(dy.pickneglogsoftmax(w2_p, w2))
-            pred_losses.append(dy.pickneglogsoftmax(pred_p, self.pred2index[predicate]))
+            w1_losses.append(dy.pickneglogsoftmax(w1_p, w1) * count)
+            w2_losses.append(dy.pickneglogsoftmax(w2_p, w2) * count)
+            pred_losses.append(dy.pickneglogsoftmax(pred_p, self.pred2index[predicate]) * count)
 
-        w1_loss, w2_loss, pred_loss = dy.esum(w1_losses), dy.esum(w2_losses), dy.esum(pred_losses)
+        w1_loss, w2_loss, pred_loss = dy.esum(w1_losses) / total_counts, \
+                                      dy.esum(w2_losses) / total_counts, \
+                                      dy.esum(pred_losses) / total_counts
         loss = dy.esum([w1_loss, w2_loss, pred_loss])
-        w1_batch_loss = w1_loss.value() / len(batch_instances)
-        w2_batch_loss = w2_loss.value() / len(batch_instances)
-        pred_batch_loss = pred_loss.value() / len(batch_instances)
-
+        w1_batch_loss, w2_batch_loss, pred_batch_loss = w1_loss.value(), w2_loss.value(), pred_loss.value()
         return loss, pred_batch_loss, w1_batch_loss, w2_batch_loss
 
     def __create_computation_graph__(self):
