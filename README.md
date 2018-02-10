@@ -132,7 +132,4 @@ optional arguments:
 
 ```
 
-
-#### Compositionality Grading
-
 TBD
