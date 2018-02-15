@@ -7,7 +7,6 @@ ap.add_argument('--prefix', help='First letter of the words. If None, all letter
 ap.add_argument('out_triplets_file', help='where to save the ngrams')
 ap.add_argument('vocab_file', help='the embeddings vocabulary file, will be used that all the words in the triplet are in the vocabulary')
 ap.add_argument('nc_file', help='the noun-compounds file, to make sure that at least one argument is from that list')
-ap.add_argument('templates_file', help='the file with the POS tags templates to include')
 args = ap.parse_args()
 
 import logging
@@ -22,16 +21,12 @@ import codecs
 
 from collections import defaultdict
 
+conjunction = set(['and', 'or', 'whether', 'if'])
+negation = set(['not', "don't", "doesn't", 'nor'])
 nlp = spacy.load('en', entity=False, add_vectors=False)
 
 
 def main():
-    with codecs.open(args.templates_file, 'r', 'utf-8') as f_in:
-        templates = [line.strip() for line in f_in]
-        templates = set([t for t in templates if '[w1]' in t and '[w2]' in t
-                         and len(t.split()) == int(args.n)])
-        logger.info('Loaded {} templates'.format(len(templates)))
-
     with codecs.open(args.vocab_file, 'r', 'utf-8') as f_in:
         vocab = set([line.strip() for line in f_in])
 
@@ -40,7 +35,6 @@ def main():
     ncs_by_prefix = defaultdict(list)
     [ncs_by_prefix[''.join(w1[:2])].append((w1, w2)) for (w1, w2) in ncs]
     [ncs_by_prefix[''.join(w2[:2])].append((w1, w2)) for (w1, w2) in ncs]
-    nc_vocab = set(list(ncs_by_prefix.keys()))
 
     ns = range(3, 6) if args.n is None else [args.n]
     prefixes = ncs_by_prefix.keys() if args.prefix is None \
@@ -51,7 +45,7 @@ def main():
 
     with codecs.open(out_file, 'w', 'utf-8', buffering=0) as f_out:
         for n in ns:
-            for prefix in sorted(prefixes):
+            for prefix in prefixes:
                 curr_ncs = ncs_by_prefix[prefix]
                 curr_file = args.ngram_filename_template.format(n, prefix)
                 logger.info('Reading file {}, looking for: {}'.format(curr_file, curr_ncs))
@@ -67,28 +61,45 @@ def main():
                         except:
                             continue
 
-                        # Filter by word, to make it faster - we require that at least one of the words in the NC
-                        # will appear in its base form
-                        words = set(ngram.split())
+                        ngram_words = ngram.split()
+                        w1, pattern, w2 = ngram_words[0], ' '.join(ngram_words[1:-1]), ngram_words[-1]
+                        w1, w2 = [t.lemma_ for t in nlp(unicode(w1))][0], [t.lemma_ for t in nlp(unicode(w2))][0]
 
-                        if len(words.intersection(nc_vocab)) == 0:
-                            continue
+                        # Keep everything that connects two words from the list of noun-compounds
+                        if ((w1, w2) in curr_ncs or (w2, w1) in curr_ncs) and \
+                                is_pattern_valid(vocab, pattern):
+                            f_out.write('\t'.join((w1, pattern, w2, count)) + '\n')
 
-                        # Make sure all the words are in the vocabulary
-                        if not words.issubset(vocab):
-                            continue
 
-                        # Now parse it and match by lemma
-                        parse = nlp(unicode(ngram))
-                        lemmas = [t.lemma_ for t in parse]
-                        potential_ncs = [(w1, w2) for (w1, w2) in curr_ncs if set([w1, w2]).issubset(set(lemmas))]
+def is_pattern_valid(vocab, pattern):
+    """
+    Checks whether a pattern should be included
+    :param vocab: the general vocabulary (e.g. GloVe vocabulary)
+    :param pattern: the pattern to check
+    :return: a binary value indicating whether the pattern should be included
+    """
+    if len(pattern) == 1:
+        return False
 
-                        for w1, w2 in potential_ncs:
-                            template = ' '.join([{ w1 : '[w1]', w2 : '[w2]' }.get(t.lemma_, t.pos_) for t in parse])
-                            if template in templates:
-                                paraphrase = ' '.join([{ '[w1]' : '[w1]', '[w2]' : '[w2]' }.get(pos, t.orth_)
-                                                       for t, pos in zip(parse, template.split())])
-                                f_out.write('\t'.join((w1, paraphrase, w2, count)) + '\n')
+    pattern_words = pattern.split()
+    if len(pattern_words) == 0:
+        return False
+
+    # Make sure all the words in the pattern are in the general vocabulary
+    if any([w not in vocab for w in pattern_words]):
+        return False
+
+    pattern_words_set = set(pattern_words)
+
+    # Not a conjunction
+    if len(pattern_words_set.intersection(conjunction)) > 0:
+        return False
+
+    # Not a negated pattern
+    if len(pattern_words_set.intersection(negation)) > 0:
+        return False
+
+    return True
 
 
 if __name__ == '__main__':

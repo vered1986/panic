@@ -15,7 +15,7 @@ ap.add_argument('--negative_sampling_ratio', help='the ratio from the training s
                 type=float, default='0.0')
 ap.add_argument('--negative_samples_weight', help='the weight to assign to negative samples', type=float, default='0.2')
 ap.add_argument('--continue_training', help='whether to load and keep training an existing model', action='store_true')
-ap.add_argument('--prune_paraphrases', help='the minimal score for include paraphrases', type=float, default=0.0)
+ap.add_argument('--prune_paraphrases', help='the number of best paraphrases for each noun-compound', type=int, default=-1)
 ap.add_argument('--filter_vocab', help='whether to load only the vocabulary embeddings (to save memory)', action='store_true')
 ap.add_argument('dataset_dir', help='path to the data directory, where the files train.tsv and val.tsv are expected')
 ap.add_argument('model_dir', help='where to store the result')
@@ -81,11 +81,11 @@ def main():
 
     UNK = word2index['unk']
     train_set = [(word2index.get(w1, UNK),
-                  tuple([word2index.get(w, UNK) for w in paraphrase.split()]),
-                  word2index.get(w2, UNK), weight) for w1, paraphrase, w2, weight in train_set]
+                  tuple([word2index.get(w, UNK) for w in predicate.split()]),
+                  word2index.get(w2, UNK), weight) for w1, predicate, w2, weight in train_set]
     val_set = [(word2index.get(w1, UNK),
-                  tuple([word2index.get(w, UNK) for w in paraphrase.split()]),
-                  word2index.get(w2, UNK), weight) for w1, paraphrase, w2, weight in val_set]
+                  tuple([word2index.get(w, UNK) for w in predicate.split()]),
+                  word2index.get(w2, UNK), weight) for w1, predicate, w2, weight in val_set]
 
     index2pred = list(set([tuple(pred) for w1, pred, w2, c in train_set + val_set]))
 
@@ -115,17 +115,17 @@ def main():
 
     # Try to predict some stuff (to be replaced with some kind of evaluation)
     logger.info('Evaluation:')
-    ncs = list(set([(w1_index, w2_index) for (w1_index, par_indices, w2_index, weight) in val_set]))
+    ncs = list(set([(w1_index, w2_index) for (w1_index, pred_indices, w2_index, weight) in val_set]))
     for (w1_index, w2_index) in ncs:
         w1, w2 = words[w1_index], words[w2_index]
-        for (par_index, par_p, score) in model.predict_paraphrase(w1_index, w2_index, k=10):
-            par_text = ' '.join([words[i] for i in model.index2pred[par_index]])
-            logger.info('{}\t{:.3f}'.format(par_text.replace('[w1]', w1).replace('[w2]', w2), score))
+        for (pred_index, pred_p, score) in model.predict_predicate(w1_index, w2_index, k=10):
+            pred_text = ' '.join([words[i] for i in model.index2pred[pred_index]])
+            logger.info('{}\t{:.3f}'.format(pred_text.replace('[w1]', w1).replace('[w2]', w2), score))
         logger.info('')
 
-        for (par_index, par_p, score) in model.predict_paraphrase(w2_index, w1_index, k=10):
-            par_text = ' '.join([words[i] for i in model.index2pred[par_index]])
-            logger.info('{}\t{:.3f}'.format(par_text.replace('[w2]', w1).replace('[w1]', w2), score))
+        for (pred_index, pred_p, score) in model.predict_predicate(w2_index, w1_index, k=10):
+            pred_text = ' '.join([words[i] for i in model.index2pred[pred_index]])
+            logger.info('{}\t{:.3f}'.format(pred_text.replace('[w2]', w1).replace('[w1]', w2), score))
         logger.info('')
 
 
@@ -135,24 +135,34 @@ def load_dataset(dataset_filename):
     :param dataset_filename: the tsv file
     :return: a list of instances
     """
-    dataset = []
+    paraphrases = defaultdict(lambda: defaultdict(lambda: defaultdict(float)))
 
     with codecs.open(dataset_filename, 'r', 'utf-8') as f_in:
         for line in tqdm.tqdm(f_in):
-            w1, paraphrase, w2, weight = line.strip().split('\t')
-
-            if '[w1]' not in paraphrase or '[w2]' not in paraphrase:
-                continue
-
+            w1, pattern, w2, weight = line.strip().split('\t')
             weight = float(weight)
-            if weight >= args.prune_paraphrases:
-                dataset.append((w1, paraphrase, w2, weight))
+            paraphrases[(w1, w2)][len(pattern.split()) - 2][pattern] = weight
+
+    # Keep for every noun-compound the best paraphrases in each length
+    paraphrases = {(w1, w2): [(p, weight)
+                              for p_list in
+                              [sorted(len_paraphrases.items(), key=lambda x: x[1],
+                                           reverse=True)[:
+                              args.prune_paraphrases * length if args.prune_paraphrases > 0
+                              else len(len_paraphrases) + 1]
+                                    for length, len_paraphrases in curr_paraphrases.items()]
+                              for (p, weight) in p_list]
+                   for (w1, w2), curr_paraphrases in paraphrases.items()}
+
+    dataset = [(w1, pattern, w2, weight)
+               for (w1, w2), curr_paraphrases in paraphrases.items()
+               for pattern, weight in curr_paraphrases]
 
     # Add negative samples
     if args.negative_sampling_ratio > 0:
         logger.info('Adding negative samples...')
         ratio = min(args.negative_sampling_ratio, 1.0)
-        w1_num_negative = w2_num_negative = par_num_negative = \
+        w1_num_negative = w2_num_negative = pred_num_negative = \
             int(math.ceil((len(dataset) * ratio) / 3))
 
         preds_for_w2 = defaultdict(set)
@@ -172,13 +182,13 @@ def load_dataset(dataset_filename):
                         if pred not in preds_for_w1[w1]]
 
         related_pairs = set([(w1, w2) for (w1, pred, w2, weight) in dataset])
-        par_negatives = [(w1, '[w2] is unrelated to [w1]', w2, args.negative_samples_weight)
+        pred_negatives = [(w1, 'is unrelated to', w2, args.negative_samples_weight)
                           for (w1, _, _, _), (_, _, w2, _)
-                          in zip(random.sample(dataset, par_num_negative),
-                                 random.sample(dataset, par_num_negative))
+                          in zip(random.sample(dataset, pred_num_negative),
+                                 random.sample(dataset, pred_num_negative))
                           if (w1, w2) not in related_pairs]
 
-        negative_samples = w1_negatives + w2_negatives + par_negatives
+        negative_samples = w1_negatives + w2_negatives + pred_negatives
         logger.info('Added {} negative samples...'.format(len(negative_samples)))
         dataset += negative_samples
 
