@@ -13,7 +13,10 @@ logger.setLevel(logging.DEBUG)
 
 NUM_LAYERS = 1
 DISPLAY_FREQ = 1000
-SPECIAL_WORDS = 2
+SPECIAL_WORDS = 3
+W1_ARG = 0
+W2_ARG = 1
+PAR_ARG = 2
 
 
 class Model:
@@ -31,7 +34,7 @@ class Model:
         """
         self.wv = wv
         self.index2pred = index2pred
-        self.pred2index = {p: i for i, p in enumerate(index2pred)}
+        self.par2index = {p: i for i, p in enumerate(index2pred)}
         self.curr_epoch = 0
         self.n_epochs = n_epochs
         self.embeddings_dim = wv.shape[1]
@@ -72,12 +75,9 @@ class Model:
                               for i in range(0, len(val_set), self.minibatch_size)]:
                 dy.renew_cg()
                 nminibatches += 1
-                W1, W2, W_p1, W_p2 = dy.parameter(self.model_parameters['W1']), \
-                                     dy.parameter(self.model_parameters['W2']), \
-                                     dy.parameter(self.model_parameters['W_p1']), \
-                                     dy.parameter(self.model_parameters['W_p2'])
-                _, par_batch_loss, w1_batch_loss, w2_batch_loss = self.__compute_batch_loss__(
-                    W1, W2, W_p1, W_p2, minibatch)
+                W_w, W_p = dy.parameter(self.model_parameters['W_w']), \
+                           dy.parameter(self.model_parameters['W_p'])
+                _, par_batch_loss, w1_batch_loss, w2_batch_loss = self.__compute_batch_loss__(W_w, W_p, minibatch)
                 losses.append((par_batch_loss, w1_batch_loss, w2_batch_loss))
 
             w1_batch_loss, w2_batch_loss, par_batch_loss = zip(*losses)
@@ -102,10 +102,8 @@ class Model:
 
         save_to = output_prefix + '/model'
 
-        self.model_parameters['W1'].save(save_to, '/W1')
-        self.model_parameters['W2'].save(save_to, '/W2', append=True)
-        self.model_parameters['W_p1'].save(save_to, '/W_p1', append=True)
-        self.model_parameters['W_p2'].save(save_to, '/W_p2', append=True)
+        self.model_parameters['W_w'].save(save_to, '/W_w')
+        self.model_parameters['W_p'].save(save_to, '/W_p', append=True)
         self.builder.param_collection().save(save_to, '/builder', append=True)
         self.model_parameters['arg_lookup'].save(save_to, '/arg_lookup_table', append=True)
 
@@ -127,10 +125,10 @@ class Model:
         renew_every = 1000
         vecs = []
 
-        for i, pred in tqdm.tqdm(enumerate(self.index2pred)):
+        for i, par in tqdm.tqdm(enumerate(self.index2pred)):
             if i % renew_every == 0:
                 dy.renew_cg()
-            _, _, par_vec = self.__compute_paraphrase_vector__(pred)
+            par_vec = self.__compute_state__(par, -1)
             vecs.append(par_vec.npvalue())
 
         self.paraphrase_matrix = np.vstack(vecs)
@@ -147,10 +145,8 @@ class Model:
         :return the possible vectors of w1
         """
         dy.renew_cg()
-        W1 = dy.parameter(self.model_parameters['W1'])
-        w2_vec = self.lookup(w2)
-        w1_vec_in_par, _, _ = self.__compute_paraphrase_vector__(paraphrase)
-        distribution = dy.softmax(self.__predict_w1__(W1, w1_vec_in_par, w2_vec)).npvalue()
+        W_w = dy.parameter(self.model_parameters['W_w'])
+        distribution = dy.softmax(self.__predict_w1__(W_w, paraphrase, w2)).npvalue()
         best_w1_indices = distribution.argsort()[-k:][::-1]
         return [(w1_index, self.lookup(w1_index).npvalue(), distribution[w1_index]) for w1_index in best_w1_indices]
 
@@ -163,24 +159,20 @@ class Model:
         :return the possible vectors of w2
         """
         dy.renew_cg()
-        W2 = dy.parameter(self.model_parameters['W2'])
-        w1_vec = self.lookup(w1)
-        _, w2_vec_in_par, _  = self.__compute_paraphrase_vector__(paraphrase)
-        distribution = dy.softmax(self.__predict_w2__(W2, w2_vec_in_par, w1_vec)).npvalue()
+        W_w = dy.parameter(self.model_parameters['W_w'])
+        distribution = dy.softmax(self.__predict_w2__(W_w, paraphrase, w1)).npvalue()
         best_w2_indices = distribution.argsort()[-k:][::-1]
         return [(w2_index, self.lookup(w2_index).npvalue(), distribution[w2_index]) for w2_index in best_w2_indices]
 
-    def __compute_paraphrase_vector__(self, paraphrase):
+    def __compute_state__(self, paraphrase, target_index):
         """
         Computes the paraphrase vector from the LSTM
         :param paraphrase: a list of word indices
         :return: the output vectors: representing w1, w2, and the entire paraphrase
         """
-        w1_arg, w2_arg = paraphrase.index(0), paraphrase.index(1)
         par_words = [self.lookup(w) for w in paraphrase]
         outputs = self.builder.transduce(par_words)
-        w1_arg_vec, w2_arg_vec, par_vec = outputs[w1_arg], outputs[w2_arg], outputs[-1]
-        return w1_arg_vec, w2_arg_vec, par_vec
+        return outputs[target_index]
 
     def predict_paraphrase(self, w1, w2, k=10):
         """
@@ -191,43 +183,54 @@ class Model:
         :return the vectors of the predicted paraphrase
         """
         dy.renew_cg()
-        W_p1, W_p2 = dy.parameter(self.model_parameters['W_p1']), dy.parameter(self.model_parameters['W_p2'])
-        w1_vec, w2_vec = self.lookup(w1), self.lookup(w2)
-        distribution = dy.softmax(self.__predict_paraphrase__(W_p1, W_p2, w1_vec, w2_vec)).npvalue()
+        W_p = dy.parameter(self.model_parameters['W_p'])
+        distribution = dy.softmax(self.__predict_paraphrase__(W_p, w1, w2)).npvalue()
         best_par_indices = distribution.argsort()[-k:][::-1]
-        return [(par_index, self.__compute_paraphrase_vector__(self.index2pred[par_index])[-1].npvalue(),
+        return [(par_index, self.__compute_state__(self.index2pred[par_index], -1).npvalue(),
                  distribution[par_index]) for par_index in best_par_indices]
 
-    def __predict_w1__(self, W_w_1, par_vec, w2_vec):
+    def __predict_w1__(self, W_w, paraphrase, w2):
         """
         Predict the word w1 given w2 and the paraphrase
-        :param W_w_1: the first matrix for word prediction
+        :param W_w: the matrix for word prediction
         :param w2_vec: the index of w2
-        :param par_vec: the paraphrase output vector in the index of the [w1] arg
         :return a vector representing the predicted w1
         """
+        # Replace the w2 argument in the paraphrase with the actual w2
+        target_index = paraphrase.index(W1_ARG)
+        paraphrase = list(paraphrase)
+        paraphrase[paraphrase.index(W2_ARG)] = w2
+        paraphrase = tuple(paraphrase)
+        w1_vec_in_paraphrase = self.__compute_state__(paraphrase, target_index)
+        return W_w * w1_vec_in_paraphrase
 
-        return W_w_1 * dy.concatenate([par_vec, w2_vec])
-
-    def __predict_w2__(self, W_w_1, par_vec, w1_vec):
+    def __predict_w2__(self, W_w, paraphrase, w1):
         """
         Predict the word w2 given w1 and the paraphrase
-        :param W_w_1: the first matrix for word prediction
+        :param W_w: the matrix for word prediction
         :param w1_vec: the index of w1
-        :param par_vec: the paraphrase output vector in the index of the [w2] arg
         :return a vector representing the predicted w2
         """
-        return W_w_1 * dy.concatenate([par_vec, w1_vec])
+        # Replace the w1 argument in the paraphrase with the actual w1
+        target_index = paraphrase.index(W2_ARG)
+        paraphrase = list(paraphrase)
+        paraphrase[paraphrase.index(W1_ARG)] = w1
+        paraphrase = tuple(paraphrase)
+        w2_vec_in_paraphrase = self.__compute_state__(paraphrase, target_index)
+        return W_w * w2_vec_in_paraphrase
 
-    def __predict_paraphrase__(self, W_p1, W_p2, w1_vec, w2_vec):
+    def __predict_paraphrase__(self, W_p, w1, w2):
         """
         Predict the word w2 given w1 and the paraphrase
-        :param W_p: the first matrix for paraphrase prediction
-        :param w1_vec: the index of w1
-        :param w2_vec: the index of w2
+        :param W_p: the matrix for paraphrase prediction
+        :param par_vec: the vector representing the fake paraphrase w2 [par] w1
         :return a vector representing the predicted paraphrase
         """
-        return W_p2 * dy.tanh(W_p1 * dy.concatenate([w1_vec, w2_vec]))
+        # Create a fake paraphrase w2 [paraphrase] w1
+        paraphrase = (w2, PAR_ARG, w1)
+        target_index = 1
+        par_vec = self.__compute_state__(paraphrase, target_index)
+        return W_p * par_vec
 
     def __train__(self, train_set, validation_function):
         """
@@ -250,15 +253,12 @@ class Model:
 
             for minibatch in range(nminibatches):
                 dy.renew_cg()
-                W1, W2, W_p1, W_p2 = dy.parameter(self.model_parameters['W1']), \
-                                     dy.parameter(self.model_parameters['W2']), \
-                                     dy.parameter(self.model_parameters['W_p1']), \
-                                     dy.parameter(self.model_parameters['W_p2'])
+                W_w, W_p = dy.parameter(self.model_parameters['W_w']), \
+                           dy.parameter(self.model_parameters['W_p'])
 
                 batch_indices = epoch_indices[minibatch_size * minibatch:minibatch_size * (minibatch + 1)]
                 batch_instances = [train_set[i] for i in batch_indices]
-                loss, par_batch_loss, w1_batch_loss, w2_batch_loss = self.__compute_batch_loss__(
-                    W1, W2, W_p1, W_p2, batch_instances)
+                loss, par_batch_loss, w1_batch_loss, w2_batch_loss = self.__compute_batch_loss__(W_w, W_p, batch_instances)
                 batch_loss = w1_batch_loss + w2_batch_loss + par_batch_loss
 
                 if (minibatch + 1) % DISPLAY_FREQ == 0:
@@ -292,37 +292,36 @@ class Model:
                 logger.info('Lost patience, stopping training')
                 break
 
-    def __compute_batch_loss__(self, W1, W2, W_p1, W_p2, batch_instances):
+    def __compute_batch_loss__(self, W_w, W_p, batch_instances):
         """
         Predict the instances in the current batch and return the losses
-        :param W1: the parameter
-        :param W2: the parameter
+        :param W_w: the parameter
         :param W_p: the parameter
         :param batch_instances:
         :return: loss (expression, total), par_batch_loss, w1_batch_loss, w2_batch_loss (floats)
         """
         w1_losses, w2_losses, par_losses = [], [], []
-        total_counts = 0.0
+        total_weight = 0.0
 
-        for w1, paraphrase, w2, count in batch_instances:
-            total_counts += count
-            w1_vec, w2_vec = self.lookup(w1), self.lookup(w2)
-            w1_vec_in_par, w2_vec_in_par, _ = self.__compute_paraphrase_vector__(paraphrase)
+        for w1, paraphrase, w2, weight in batch_instances:
+            total_weight += weight
 
             # Predict w1, w2 and the paraphrase from each other
-            w1_p = self.__predict_w1__(W1, w1_vec_in_par, w2_vec)
-            w2_p = self.__predict_w2__(W2, w2_vec_in_par, w1_vec)
-            par_p = self.__predict_paraphrase__(W_p1, W_p2, w1_vec, w2_vec)
+            w1_p = self.__predict_w1__(W_w, paraphrase, w2)
+            w2_p = self.__predict_w2__(W_w, paraphrase, w1)
+            par_p = self.__predict_paraphrase__(W_p, w1, w2)
 
-            w1_losses.append(dy.pickneglogsoftmax(w1_p, w1) * count)
-            w2_losses.append(dy.pickneglogsoftmax(w2_p, w2) * count)
-            par_losses.append(dy.pickneglogsoftmax(par_p, self.pred2index[paraphrase]) * count)
+            w1_losses.append(dy.pickneglogsoftmax(w1_p, w1) * weight)
+            w2_losses.append(dy.pickneglogsoftmax(w2_p, w2) * weight)
+            par_losses.append(dy.pickneglogsoftmax(par_p, self.par2index[paraphrase]) * weight)
 
-        w1_loss, w2_loss, par_loss = dy.esum(w1_losses) / total_counts, \
-                                      dy.esum(w2_losses) / total_counts, \
-                                      dy.esum(par_losses) / total_counts
+        w1_loss, w2_loss, par_loss = dy.esum(w1_losses) / total_weight, \
+                                      dy.esum(w2_losses) / total_weight, \
+                                      dy.esum(par_losses) / total_weight
         loss = dy.esum([w1_loss, w2_loss, par_loss])
-        w1_batch_loss, w2_batch_loss, par_batch_loss = w1_loss.value(), w2_loss.value(), par_loss.value()
+        w1_batch_loss, w2_batch_loss, par_batch_loss = w1_loss.value(), \
+                                                       w2_loss.value(), \
+                                                       par_loss.value()
         return loss, par_batch_loss, w1_batch_loss, w2_batch_loss
 
     def __create_computation_graph__(self):
@@ -342,17 +341,14 @@ class Model:
 
         # Predict w1 from w2 and the paraphrase
         # input_dim = self.embeddings_dim + self.lstm_out_dim
-        input_dim = self.embeddings_dim + self.lstm_out_dim
+        input_dim = self.lstm_out_dim
         output_dim = self.wv.shape[0] # vocabulary size
-        self.model_parameters['W1'] = self.model.add_parameters((output_dim, input_dim))
-        self.model_parameters['W2'] = self.model.add_parameters((output_dim, input_dim))
+        self.model_parameters['W_w'] = self.model.add_parameters((output_dim, input_dim))
 
         # Add the parameter to predict a paraphrase
-        input_dim = 2 * self.embeddings_dim
-        output_dim = len(self.pred2index)
-        hidden_dim = self.embeddings_dim
-        self.model_parameters['W_p1'] = self.model.add_parameters((hidden_dim, input_dim))
-        self.model_parameters['W_p2'] = self.model.add_parameters((output_dim, hidden_dim))
+        input_dim = self.lstm_out_dim
+        output_dim = len(self.par2index)
+        self.model_parameters['W_p'] = self.model.add_parameters((output_dim, input_dim))
 
     @classmethod
     def load_model(cls, model_file_prefix, wv, update_embeddings=False):
@@ -371,10 +367,8 @@ class Model:
         load_from = model_file_prefix + '/model'
         logger.info('Loading the model from {}...'.format(load_from))
 
-        classifier.model_parameters['W1'].populate(load_from, '/W1')
-        classifier.model_parameters['W2'].populate(load_from, '/W2')
-        classifier.model_parameters['W_p1'].populate(load_from, '/W_p1')
-        classifier.model_parameters['W_p2'].populate(load_from, '/W_p2')
+        classifier.model_parameters['W_w'].populate(load_from, '/W_w')
+        classifier.model_parameters['W_p'].populate(load_from, '/W_p')
         classifier.builder.param_collection().populate(load_from, '/builder')
         classifier.model_parameters['arg_lookup'].populate(load_from, '/arg_lookup_table')
 

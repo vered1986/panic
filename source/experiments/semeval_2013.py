@@ -6,7 +6,7 @@ ap.add_argument('--unrelated_threshold', help='the minimal score the "is unrelat
 ap.add_argument('train_gold_file', help='a tsv file with gold paraphrases and their scores')
 ap.add_argument('language_model_dir', help='the path to the trained language model')
 ap.add_argument('word_embeddings', help='word embeddings to be used for the language model')
-ap.add_argument('google_ngrams_dataset_file', help='path to the google ngrams tsv file with w1, paraphrase, w2, score triplets')
+ap.add_argument('--google_ngrams_dataset_file', help='path to the google ngrams tsv file with w1, paraphrase, w2, score triplets', default=None)
 args = ap.parse_args()
 
 import logging
@@ -38,7 +38,7 @@ def main():
     wv, words = load_binary_embeddings(args.word_embeddings)
 
     if words[0] != '[w1]':
-        words = ['[w1]', '[w2]'] + words
+        words = ['[w1]', '[w2]', '[par]'] + words
 
     word2index = {w: i for i, w in enumerate(words)}
     UNK = word2index['unk']
@@ -50,16 +50,17 @@ def main():
     train_predicted_paraphrases = get_paraphrase(model, 'train', words, word2index, UNK)
     test_predicted_paraphrases = get_paraphrase(model, 'test', words, word2index, UNK)
 
-    thresholds = [0.000]
+    thresholds = [1, 2, 5, 10, 25, 50, 100, 250, 500, 1000, 10000, 100000, 1000000]
     scores = []
 
     for threshold in thresholds:
         curr_train_predicted_paraphrases = { (w1, w2) : [(p, score) for (p, score) in curr_paraphrases
-                                                         if score >= threshold]
+                                                         if score * threshold >= curr_paraphrases[0][1]]
                                              for (w1, w2), curr_paraphrases in train_predicted_paraphrases.items() }
 
         curr_scores = evaluate(curr_train_predicted_paraphrases, threshold)
-        score = 0.0 if min(curr_scores) < 0.1 else np.mean(curr_scores) # not to do bad in any evaluation!
+        # score = 0.0 if min(curr_scores) < 0.1 else np.mean(curr_scores) # not to do bad in any evaluation!
+        score = curr_scores[0]
         scores.append(score)
         logger.info('Threshold = {}, isomorphic = {:.3f}, non-isomorphic = {:.3f}'.format(
             threshold, curr_scores[0], curr_scores[1]))
@@ -68,7 +69,8 @@ def main():
     best_threshold = thresholds[best_index]
     logger.info('Best threshold: {}, score: {}'.format(best_threshold, scores[best_index]))
 
-    test_predicted_paraphrases = {(w1, w2): [(p, score) for (p, score) in curr_paraphrases if score >= best_threshold]
+    test_predicted_paraphrases = {(w1, w2): [(p, score) for (p, score) in curr_paraphrases
+                                             if score * best_threshold >= curr_paraphrases[0][1]]
                                   for (w1, w2), curr_paraphrases in test_predicted_paraphrases.items()}
 
     out_file = 'test_predicted.tsv'
@@ -87,7 +89,7 @@ def evaluate(predictions, threshold):
     :return: the evaluation score
     """
     # Save the evaluations to a temporary file
-    prediction_file = 'temp/train_{}_predictions.tsv'.format(threshold)
+    prediction_file = 'temp/train_{:.3f}_predictions.tsv'.format(threshold)
     with codecs.open(prediction_file, 'w', 'utf-8') as f_out:
         for (w1, w2), curr_paraphrases in predictions.items():
             curr_paraphrases = sorted(curr_paraphrases, key=lambda x: x[1], reverse=True)
@@ -113,16 +115,17 @@ def get_paraphrase(model, filename, words, word2index, UNK):
     with codecs.open(filename + '.tsv', 'r', 'utf-8') as f_in:
         noun_compounds = [tuple(line.strip().split('\t')) for line in f_in]
 
-    logger.info('Loading the Google N-grams dataset from {}'.format(args.google_ngrams_dataset_file))
     paraphrases = {(w1, w2): defaultdict(float) for (w1, w2) in noun_compounds}
-    with codecs.open(args.google_ngrams_dataset_file, 'r', 'utf-8') as f_in:
-        for line in tqdm.tqdm(f_in):
-            w1, paraphrase, w2, score = line.strip().split('\t')
-            if (w1, w2) in noun_compounds:
-                paraphrase = paraphrase.replace('[w1]', w1).replace('[w2]', w2)
-                if 'of said' not in paraphrase and paraphrase.split()[-2] != 'in' \
-                        and paraphrase.split()[-1] != 'who':
-                    paraphrases[(w1, w2)][paraphrase] = float(score)
+
+    if args.google_ngrams_dataset_file is not None:
+        logger.info('Loading the Google N-grams dataset from {}'.format(args.google_ngrams_dataset_file))
+        with codecs.open(args.google_ngrams_dataset_file, 'r', 'utf-8') as f_in:
+            for line in tqdm.tqdm(f_in):
+                w1, paraphrase, w2, score = line.strip().split('\t')
+                if (w1, w2) in noun_compounds:
+                    paraphrase = paraphrase.replace('[w1]', w1).replace('[w2]', w2)
+                    if 'of said' not in paraphrase and paraphrase.split()[-1] != 'who':
+                        paraphrases[(w1, w2)][paraphrase] = float(score)
 
     for (w1, w2) in tqdm.tqdm(noun_compounds):
         w1_index, w2_index = word2index.get(w1, UNK), word2index.get(w2, UNK)
@@ -133,8 +136,7 @@ def get_paraphrase(model, filename, words, word2index, UNK):
         for pred_index, pred_p, score in pred_vectors:
             for paraphrase in get_paraphrase_text(words, model.index2pred[pred_index]):
                 paraphrase = paraphrase.replace('[w1]', w1).replace('[w2]', w2)
-                if 'of said' not in paraphrase and paraphrase.split()[-2] != 'in' \
-                        and paraphrase.split()[-1] != 'who':
+                if 'of said' not in paraphrase and paraphrase.split()[-1] != 'who':
                     paraphrases[(w1, w2)][paraphrase] = max(paraphrases[(w1, w2)][paraphrase], score)
 
         # Remove "unrelated" paraphrases if found enough related ones with higher scores

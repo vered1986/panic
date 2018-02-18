@@ -70,7 +70,7 @@ def main():
                     [w for (w1, p, w2, weight) in train_set + val_set for w in p.split()])
 
     wv, words = load_binary_embeddings(args.embeddings_file, vocab)
-    words = ['[w1]', '[w2]'] + list(words)
+    words = ['[w1]', '[w2]', '[par]'] + list(words)
     word2index = {w: i for i, w in enumerate(words)}
 
     if args.filter_vocab:
