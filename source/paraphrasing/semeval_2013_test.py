@@ -7,6 +7,7 @@ ap.add_argument('patterns_file', help='the file with the POS patterns')
 ap.add_argument('word_embeddings', help='word embeddings to be used for the language model')
 ap.add_argument('reranker', help='the pkl file for the trained re-ranker')
 ap.add_argument('--k', help='the number of paraphrases to retrieve for re-rankning, default = 1000', default=1000, type=int)
+ap.add_argument('--minimum_score', help='the minimum score to keep a paraphrase', type=float, default=0.1)
 ap.add_argument('--unrelated_threshold', help='the minimal score the "is unrelated to" paraphrase has to get to be included', default=0.1)
 args = ap.parse_args()
 
@@ -69,7 +70,7 @@ def main():
                                          model, wv, word2index, UNK)
 
     logger.info('Reranking test paraphrases')
-    test_predicted_paraphrases = rerank(test_predicted_paraphrases, test_features, ranker, args.k)
+    test_predicted_paraphrases = rerank(test_predicted_paraphrases, test_features, ranker, args.minimum_score)
 
     logger.info('Evaluation:')
     isomorphic_score, nonisomorphic_score = evaluate(test_predicted_paraphrases, args.test_gold_file,

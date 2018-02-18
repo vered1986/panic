@@ -31,32 +31,37 @@ prepositions = ['with', 'at', 'from', 'into', 'during', 'including', 'until', 'a
                'around', 'down', 'off', 'above', 'near']
 
 
-def rerank(test_predicted_paraphrases, test_features, ranker, k):
+def rerank(test_predicted_paraphrases, test_features, ranker, minimum_score):
     """
     Rerank the test predict paraphrases according to the ranker
     :param test_predicted_paraphrases: a dictionary of noun-compound to ranked paraphrases
     :param test_features: the features for re-ranking
     :param ranker: the reranker
+    :param minimum_score: minimum paraphrase score to keep.
     :return: a dictionary of noun-compound to (re-)ranked paraphrases
     """
     new_test_predicted_paraphrases = { (w1, w2) : [] for (w1, w2) in test_predicted_paraphrases.keys() }
 
-    for ((w1, w2), curr_paraphrases), curr_paraphrase_features in zip(
-            test_predicted_paraphrases.items(), test_features):
-
-        pars_and_vectors = zip(curr_paraphrases, curr_paraphrase_features)
+    for ((w1, w2), curr_paraphrases), curr_paraphrase_features in tqdm.tqdm(zip(
+            test_predicted_paraphrases.items(), test_features)):
+        pars_and_vectors = zip(curr_paraphrases.items(), curr_paraphrase_features)
 
         # Sort the paraphrases according to the ranking
         def compare_paraphrases(p1, p2):
             return ranker.predict((p2[1] - p1[1]).reshape(1, -1))
 
-        sorted_paraphrases = [(paraphrase, rank) for rank, (paraphrase, score) in
+        # Consider both the original score (for the specific noun-compound)
+        # and the new rank (which paraphrases are more commonly ranked higher)
+        sorted_paraphrases = [(paraphrase, (len(curr_paraphrases) - rank) * float(score))
+                              for rank, ((paraphrase, score), feature) in
                               enumerate(sorted(pars_and_vectors,
-                                               key=functools.cmp_to_key(compare_paraphrases))[:k*2//3])]
+                                               key=functools.cmp_to_key(compare_paraphrases)))]
 
-        # Reverse the score
-        new_test_predicted_paraphrases[(w1, w2)] = [(paraphrase, len(sorted_paraphrases) - rank)
-                                                    for (paraphrase, rank) in sorted_paraphrases]
+        sorted_paraphrases = sorted(sorted_paraphrases, key=lambda x: x[1], reverse=True)
+
+        # Keep only paraphrases with score above threshold. Best score = k * 1 = k,
+        new_test_predicted_paraphrases[(w1, w2)] = \
+            [(paraphrase, score) for (paraphrase, score) in sorted_paraphrases if score >= minimum_score]
 
     return new_test_predicted_paraphrases
 
@@ -203,17 +208,21 @@ def extract_paraphrase_features(w1, w2, paraphrase, pos2index, prep2index,
     if '[w1]' in paraphrase_with_args and '[w2]' in paraphrase_with_args:
         w1_index, w2_index = word2index.get(w1, UNK), word2index.get(w2, UNK)
         par_indices = tuple([word2index.get(w, UNK) for w in paraphrase_with_args])
-        _, predicted_w1, w1_score = model.predict_w1(w2_index, par_indices, k=1)[0]
-        _, predicted_w2, w2_score = model.predict_w2(w1_index, par_indices, k=1)[0]
+        # _, predicted_w1, w1_score = model.predict_w1(w2_index, par_indices, k=1)[0]
+        # _, predicted_w2, w2_score = model.predict_w2(w1_index, par_indices, k=1)[0]
         _, predicted_par_vector, par_score = model.predict_paraphrase(w1_index, w2_index, k=1)[0]
         gold_par_index = model.par2index.get(par_indices, -1)
 
-        similarities = np.array([(1 - cosine(predicted_w1, wv[w1_index-3, :])) * w1_score,
-                                 (1 - cosine(predicted_w2, wv[w2_index-3, :])) * w2_score,
-                                 (1 - cosine(predicted_par_vector, model.paraphrase_matrix[gold_par_index])) *
-                                      par_score if gold_par_index > 0 else 0.0])
+        # similarities = np.array([(1 - cosine(predicted_w1, wv[w1_index-3, :])) * w1_score,
+        #                          (1 - cosine(predicted_w2, wv[w2_index-3, :])) * w2_score,
+        #                          (1 - cosine(predicted_par_vector, model.paraphrase_matrix[gold_par_index])) *
+        #                               par_score if gold_par_index > 0 else 0.0])
+
+        similarities = np.array([(1 - cosine(predicted_par_vector, model.paraphrase_matrix[gold_par_index])) *
+                                 par_score if gold_par_index > 0 else 0.0])
     else:
-        similarities = [0.0, 0.0, 0.0]
+        similarities = [0.0]
+        #  similarities = [0.0, 0.0, 0.0]
         logger.warning('No similarities computed for {}'.format(paraphrase))
 
     feature = np.concatenate([pos_feature, preposition_feature, additional_features, similarities])

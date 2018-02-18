@@ -2,11 +2,11 @@
 import argparse
 ap = argparse.ArgumentParser()
 ap.add_argument('train_gold_file', help='a tsv file with gold train paraphrases and their scores')
-ap.add_argument('test_gold_file', help='a tsv file with gold test paraphrases and their scores')
 ap.add_argument('language_model_dir', help='the path to the trained language model')
 ap.add_argument('patterns_file', help='the file with the POS patterns')
 ap.add_argument('word_embeddings', help='word embeddings to be used for the language model')
 ap.add_argument('--k', help='the number of paraphrases to retrieve for re-rankning, default = 1000', default=1000, type=int)
+ap.add_argument('--minimum_score', help='the minimum score to keep a paraphrase', type=float, default=0.1)
 ap.add_argument('--unrelated_threshold', help='the minimal score the "is unrelated to" paraphrase has to get to be included', default=0.1)
 args = ap.parse_args()
 
@@ -71,7 +71,7 @@ def main():
                                           model, wv, word2index, UNK)
 
     logger.info('Reranking train paraphrases')
-    train_predicted_paraphrases = rerank(train_predicted_paraphrases, train_features, ranker, args.k)
+    train_predicted_paraphrases = rerank(train_predicted_paraphrases, train_features, ranker, args.minimum_score)
 
     # Save the reranker
     joblib.dump(ranker, 'ranker.pkl')
