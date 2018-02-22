@@ -208,21 +208,13 @@ def extract_paraphrase_features(w1, w2, paraphrase, pos2index, prep2index,
     if '[w1]' in paraphrase_with_args and '[w2]' in paraphrase_with_args:
         w1_index, w2_index = word2index.get(w1, UNK), word2index.get(w2, UNK)
         par_indices = tuple([word2index.get(w, UNK) for w in paraphrase_with_args])
-        # _, predicted_w1, w1_score = model.predict_w1(w2_index, par_indices, k=1)[0]
-        # _, predicted_w2, w2_score = model.predict_w2(w1_index, par_indices, k=1)[0]
         _, predicted_par_vector, par_score = model.predict_paraphrase(w1_index, w2_index, k=1)[0]
         gold_par_index = model.par2index.get(par_indices, -1)
-
-        # similarities = np.array([(1 - cosine(predicted_w1, wv[w1_index-3, :])) * w1_score,
-        #                          (1 - cosine(predicted_w2, wv[w2_index-3, :])) * w2_score,
-        #                          (1 - cosine(predicted_par_vector, model.paraphrase_matrix[gold_par_index])) *
-        #                               par_score if gold_par_index > 0 else 0.0])
 
         similarities = np.array([(1 - cosine(predicted_par_vector, model.paraphrase_matrix[gold_par_index])) *
                                  par_score if gold_par_index > 0 else 0.0])
     else:
         similarities = [0.0]
-        #  similarities = [0.0, 0.0, 0.0]
         logger.warning('No similarities computed for {}'.format(paraphrase))
 
     feature = np.concatenate([pos_feature, preposition_feature, additional_features, similarities])
