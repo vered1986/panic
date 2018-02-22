@@ -1,7 +1,7 @@
 # Command line arguments
 import argparse
 ap = argparse.ArgumentParser()
-ap.add_argument('noun_compounds_file', help='path to a tsv file with noun-compounds')
+ap.add_argument('test_gold_file', help='a tsv file with gold test paraphrases and their scores')
 ap.add_argument('google_ngrams_dataset_file', help='path to the google ngrams tsv file with w1, paraphrase, w2, score triplets')
 args = ap.parse_args()
 
@@ -16,33 +16,33 @@ sys.path.append('../')
 import tqdm
 import codecs
 
+from collections import defaultdict
+
+from semeval_2013_common import evaluate, load_gold
+
 
 def main():
-    logger.info('Loading the noun compounds from {}'.format(args.noun_compounds_file))
-    with codecs.open(args.noun_compounds_file, 'r', 'utf-8') as f_in:
-        noun_compounds = [tuple(line.strip().split('\t')) for line in f_in]
+    logger.info('Loading the gold test file from {}'.format(args.test_gold_file))
+    test_gold = load_gold(args.test_gold_file)
 
-    logger.info('Loading the Google N-grams dataset from {}'.format(args.google_ngrams_dataset_file))
-    paraphrases = { (w1, w2) : {} for (w1, w2) in noun_compounds }
+    logger.info('Predicting paraphrases...')
+    noun_compounds = set(test_gold.keys())
+    test_predicted = {(w1, w2): defaultdict(float) for (w1, w2) in noun_compounds}
+
     with codecs.open(args.google_ngrams_dataset_file, 'r', 'utf-8') as f_in:
         for line in tqdm.tqdm(f_in):
             w1, paraphrase, w2, score = line.strip().split('\t')
             score = float(score)
 
             if (w1, w2) in noun_compounds:
-                paraphrases[(w1, w2)]['{} {} {}'.format(w1, paraphrase, w2)] = score
+                test_predicted[(w1, w2)][paraphrase.replace('[w1]', w1).replace('[w2]', w2)] = score
 
-            if (w2, w1) in noun_compounds:
-                paraphrases[(w2, w1)]['{} {} {}'.format(w1, paraphrase, w2)] = score
+    test_predicted = { (w1, w2) : sorted(curr_paraphrases.items(), key=lambda x: x[1], reverse=True)
+                       for (w1, w2), curr_paraphrases in test_predicted.items()}
 
-    out_file = args.noun_compounds_file.replace('.tsv', '_baseline_predictions.tsv')
-    logger.info('Saving results to {}'.format(out_file))
-    with codecs.open(out_file, 'w', 'utf-8') as f_out:
-        for (w1, w2) in noun_compounds:
-            curr_paraphrases = paraphrases.get((w1, w2), {})
-            curr_paraphrases = sorted(curr_paraphrases.items(), key=lambda x: x[1], reverse=True)
-            for paraphrase, score in curr_paraphrases:
-                f_out.write('\t'.join((w1, w2, paraphrase, str(score))) + '\n')
+    logger.info('Evaluation:')
+    isomorphic_score, nonisomorphic_score = evaluate(test_predicted, args.test_gold_file, 'test_baseline_predictions.tsv')
+    logger.info('Isomorphic = {:.3f}, non-isomorphic = {:.3f}'.format(isomorphic_score, nonisomorphic_score))
 
 
 if __name__ == '__main__':

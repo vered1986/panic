@@ -1,0 +1,237 @@
+software	[w2] to [w1]	company	0.0763239875389408
+software	[w2] in [w1]	company	0.9236760124610592
+software	[w2] to develop [w1]	company	0.21518987341772153
+software	[w2] specialize in [w1]	company	0.06891701828410689
+software	[w2] to write [w1]	company	0.07735583684950774
+software	[w2] in [w1] industry	company	0.2981715893108298
+software	[w2] involved in [w1]	company	0.08438818565400844
+software	[w2] specializing in [w1]	company	0.1940928270042194
+software	[w2] specializes in [w1]	company	0.06188466947960619
+government	[w2] by [w1]	decision	0.1437193386562718
+government	[w2] to [w1]	decision	0.01634533393871607
+government	[w2] of [w1]	decision	0.7965249554268502
+government	[w2] at [w1]	decision	0.0015282222788230474
+government	[w2] on [w1]	decision	0.015260074639262024
+government	[w2] in [w1]	decision	0.026622075060076855
+government	[w2] making in [w1]	decision	0.055543943985787436
+government	[w2] of [w1] officials	decision	0.03699446128122061
+government	[w2] to transfer [w1]	decision	0.002403594942000209
+government	[w2] to remove [w1]	decision	0.0024558470059567353
+government	[w2] of [w1] administration	decision	0.00830807816908768
+government	[w2] at [w1] level	decision	0.0036053924130003134
+government	[w2] to have [w1]	decision	0.0021423346222175775
+government	[w2] to increase [w1]	decision	0.0022990908140871564
+government	[w2] on [w1] spending	decision	0.00407566098860905
+government	[w2] on [w1] policy	decision	0.003344132093217682
+government	[w2] of [w1] leaders	decision	0.00407566098860905
+government	[w2] to overthrow [w1]	decision	0.0036053924130003134
+government	[w2] processes in [w1]	decision	0.0026648552617828405
+government	[w2] processes of [w1]	decision	0.0023513428780436827
+government	[w2] making of [w1]	decision	0.012070226773957572
+government	[w2] to reduce [w1]	decision	0.002612603197826314
+government	[w2] reached by [w1]	decision	0.002612603197826314
+government	[w2] to form [w1]	decision	0.006531507994565785
+government	[w2] of [w1] agency	decision	0.004702685756087365
+government	[w2] making by [w1]	decision	0.03166475075765493
+government	[w2] of [w1] departments	decision	0.005852231163130944
+government	[w2] to enter [w1]	decision	0.007419793081826732
+government	[w2] to establish [w1]	decision	0.003135123837391577
+government	[w2] to join [w1]	decision	0.012017974710001045
+government	[w2] of [w1] agencies	decision	0.016668408402131882
+government	[w2] makers in [w1]	decision	0.08433483122583342
+government	[w2] to defend [w1]	decision	0.0038144006688264186
+government	[w2] made in [w1]	decision	0.005538718779391786
+government	[w2] taken by [w1]	decision	0.3237015362106803
+government	[w2] of [w1] thereon	decision	0.01572787125091441
+government	[w2] of [w1] bodies	decision	0.003971156860695997
+government	[w2] is whether [w1]	decision	0.005799979099174417
+government	[w2] made by [w1]	decision	0.2509666631831957
+government	[w2] to move [w1]	decision	0.003344132093217682
+government	[w2] of [w1] policy	decision	0.003971156860695997
+government	[w2] by [w1] officials	decision	0.01672066046608841
+government	[w2] of [w1] agent	decision	0.0036053924130003134
+government	[w2] by [w1] agencies	decision	0.01264499947747936
+government	[w2] to leave [w1]	decision	0.012435991221653255
+government	[w2] to support [w1]	decision	0.008464834360957258
+government	[w2] issued by [w1]	decision	0.002403594942000209
+government	[w2] of [w1] authorities	decision	0.0033963841571742082
+government	[w2] is taken by [w1]	decision	0.17604912998976457
+government	[w2] is made in [w1]	decision	0.08393039918116683
+government	[w2] is made by [w1]	decision	0.6202661207778914
+government	[w2] of [w1] of india	decision	0.11975435005117707
+car	[w2] on [w1]	seat	0.009858047727046832
+car	[w2] of [w1]	seat	0.8066611849536012
+car	[w2] to [w1]	seat	0.0006776843075421746
+car	[w2] in [w1]	seat	0.18280308301180978
+car	[w2] of [w1] aids	seat	0.656934306569343
+car	[w2] area of [w1]	seat	0.34306569343065696
+morning	[w2] of [w1]	meeting	0.05789578758235177
+morning	[w2] on [w1]	meeting	0.048213216210820524
+morning	[w2] at [w1]	meeting	0.004991016170892394
+morning	[w2] in [w1]	meeting	0.8888999800359353
+morning	[w2] is in [w1]	meeting	0.23605150214592274
+morning	[w2] held in [w1]	meeting	0.575107296137339
+morning	[w2] began in [w1]	meeting	0.1888412017167382
+child	[w2] by [w1]	abuse	0.0249500998003992
+child	[w2] to [w1]	abuse	0.02108481449798815
+child	[w2] of [w1]	abuse	0.8428856572569148
+child	[w2] on [w1]	abuse	0.04982891360136869
+child	[w2] in [w1]	abuse	0.06125051484332922
+child	[w2] made by [w1]	abuse	0.01703800786369594
+child	[w2] experienced by [w1]	abuse	0.016055045871559634
+child	[w2] of [w1] workers	abuse	0.017693315858453473
+child	[w2] of [w1] labor	abuse	0.4659239842726081
+child	[w2] of [w1] labour	abuse	0.21395806028833553
+child	[w2] of [w1] is	abuse	0.09698558322411534
+child	[w2] is that [w1]	abuse	0.038335517693315856
+child	[w2] occurs in [w1]	abuse	0.01802096985583224
+child	[w2] in [w1] care	abuse	0.06782437745740498
+child	[w2] to [w1] welfare	abuse	0.019003931847968544
+child	[w2] on [w1] development	abuse	0.014416775884665793
+child	[w2] of foster [w1]	abuse	0.01474442988204456
+child	[w2] of [w1] by women	abuse	0.12307692307692308
+child	[w2] of [w1] in america	abuse	0.6492307692307693
+child	[w2] of [w1] with disabilities	abuse	0.2276923076923077
+phone	[w2] by [w1]	call	0.07884337349397591
+phone	[w2] on [w1]	call	0.5775903614457831
+phone	[w2] at [w1]	call	0.005783132530120482
+phone	[w2] to [w1]	call	0.3300722891566265
+phone	[w2] in [w1]	call	0.0077108433734939755
+phone	[w2] to [w1] company	call	1.0
+laptop	[w2] to [w1]	computer	1.0
+cancer	[w2] on [w1]	surgery	0.039782244556113906
+cancer	[w2] of [w1]	surgery	0.3525963149078727
+cancer	[w2] in [w1]	surgery	0.6076214405360134
+cancer	[w2] to treat [w1]	surgery	0.13500784929356358
+cancer	[w2] in [w1] patients	surgery	0.10832025117739404
+cancer	[w2] to destroy [w1]	surgery	0.09105180533751962
+cancer	[w2] to remove [w1]	surgery	0.6656200941915228
+cancer	[w2] in patients with [w1]	surgery	1.0
+olive	[w2] of [w1]	oil	0.847623089983022
+olive	[w2] in [w1]	oil	0.10427277872099604
+olive	[w2] to [w1]	oil	0.04810413129598189
+olive	[w2] of beaten [w1]	oil	0.5961538461538461
+olive	[w2] out of [w1]	oil	0.40384615384615385
+olive	[w2] is made from [w1]	oil	0.46875
+olive	[w2] in place of [w1]	oil	0.53125
+coffee	[w2] of [w1]	house	0.2778581765557164
+coffee	[w2] to [w1]	house	0.7221418234442837
+coffee	[w2] to make [w1]	house	0.2064676616915423
+coffee	[w2] to take [w1]	house	0.11691542288557213
+coffee	[w2] to have [w1]	house	0.19402985074626866
+coffee	[w2] to drink [w1]	house	0.3805970149253731
+coffee	[w2] to get [w1]	house	0.10199004975124377
+school	[w2] by [w1]	teacher	0.003504833177424384
+school	[w2] to [w1]	teacher	0.01598004365450577
+school	[w2] at [w1]	teacher	0.15208730901153727
+school	[w2] from [w1]	teacher	0.0006061739943872778
+school	[w2] so [w1]	teacher	0.00012472715933894605
+school	[w2] on [w1]	teacher	0.0036520112254443404
+school	[w2] in [w1]	teacher	0.6819008419083256
+school	[w2] of [w1]	teacher	0.14214405986903647
+school	[w2] of [w1] administration	teacher	0.003287455071447357
+school	[w2] in [w1] settings	teacher	0.006399579205750855
+school	[w2] to reform [w1]	teacher	0.0021478039800122734
+school	[w2] in [w1] management	teacher	0.0022793021828701673
+school	[w2] face in [w1]	teacher	0.0024546331200140264
+school	[w2] of graded [w1]	teacher	0.0018848075742964846
+school	[w2] in selected [w1]	teacher	0.004295607960024547
+school	[w2] employed by [w1]	teacher	0.012492329271499956
+school	[w2] worked in [w1]	teacher	0.00267379679144385
+school	[w2] go to [w1]	teacher	0.003243622337161392
+school	[w2] do at [w1]	teacher	0.002586131322871921
+school	[w2] to black [w1]	teacher	0.0031559568685894626
+school	[w2] to [w1] system	teacher	0.005216095380029807
+school	[w2] in existing [w1]	teacher	0.0022793021828701673
+school	[w2] assigned to [w1]	teacher	0.01279915841150171
+school	[w2] working at [w1]	teacher	0.0022354694485842027
+school	[w2] of said [w1]	teacher	0.010914350837205225
+school	[w2] participate in [w1]	teacher	0.0024546331200140264
+school	[w2] to attend [w1]	teacher	0.0019286403085824494
+school	[w2] to reflect [w1]	teacher	0.0022354694485842027
+school	[w2] outside of [w1]	teacher	0.014157973174366617
+school	[w2] at all [w1]	teacher	0.009906197948628036
+school	[w2] arrive at [w1]	teacher	0.003112124134303498
+school	[w2] in [w1] year	teacher	0.0019286403085824494
+school	[w2] services in [w1]	teacher	0.002366967651442097
+school	[w2] involved in [w1]	teacher	0.003287455071447357
+school	[w2] in [w1] room	teacher	0.002936793197159639
+school	[w2] to parochial [w1]	teacher	0.002717629525729815
+school	[w2] engaged in [w1]	teacher	0.0021039712457263083
+school	[w2] training in [w1]	teacher	0.0035066187428771808
+school	[w2] groups in [w1]	teacher	0.0067064083457526085
+school	[w2] in nearby [w1]	teacher	0.00368194968002104
+school	[w2] of colored [w1]	teacher	0.011615674585780661
+school	[w2] to different [w1]	teacher	0.00184097484001052
+school	[w2] in said [w1]	teacher	0.00635574647146489
+school	[w2] of [w1] music	teacher	0.00727623389147015
+school	[w2] out of [w1]	teacher	0.016875602700096432
+school	[w2] working in [w1]	teacher	0.07526080476900149
+school	[w2] do in [w1]	teacher	0.008152888577189444
+school	[w2] to establish [w1]	teacher	0.0024546331200140264
+school	[w2] to open [w1]	teacher	0.006618742877180678
+school	[w2] to visit [w1]	teacher	0.003857280617164899
+school	[w2] leadership in [w1]	teacher	0.0028929604628736743
+school	[w2] in [w1] today	teacher	0.005873586394319278
+school	[w2] in [w1] districts	teacher	0.013062154817217498
+school	[w2] to run [w1]	teacher	0.00184097484001052
+school	[w2] in [w1] administration	teacher	0.0033312878057333217
+school	[w2] involvement in [w1]	teacher	0.014201805908652582
+school	[w2] in [w1] systems	teacher	0.02283685456298764
+school	[w2] work in [w1]	teacher	0.0092048742000526
+school	[w2] to leave [w1]	teacher	0.0021039712457263083
+school	[w2] to rural [w1]	teacher	0.0031997896028754273
+school	[w2] brought to [w1]	teacher	0.0017533093714385904
+school	[w2] to make [w1]	teacher	0.002542298588585956
+school	[w2] in [w1] decision	teacher	0.003418953274305251
+school	[w2] by [w1] board	teacher	0.004120277022880687
+school	[w2] returned to [w1]	teacher	0.0031997896028754273
+school	[w2] in [w1] environment	teacher	0.00267379679144385
+school	[w2] in integrated [w1]	teacher	0.005172262645743842
+school	[w2] education in [w1]	teacher	0.002498465854299991
+school	[w2] to use [w1]	teacher	0.005040764442885947
+school	[w2] perceptions of [w1]	teacher	0.006881739282896467
+school	[w2] to white [w1]	teacher	0.0030244586657315682
+school	[w2] set up [w1]	teacher	0.0020601385114403436
+school	[w2] at [w1] level	teacher	0.018278250197247305
+school	[w2] bring to [w1]	teacher	0.0026299640571578855
+school	[w2] at [w1] site	teacher	0.00810905584290348
+school	[w2] went to [w1]	teacher	0.004996931708599982
+school	[w2] in [w1] system	teacher	0.18300166564390286
+school	[w2] to high [w1]	teacher	0.0039011133514508635
+school	[w2] is in [w1]	teacher	0.017445428245813972
+school	[w2] arrives at [w1]	teacher	0.0021478039800122734
+school	[w2] in [w1] use	teacher	0.0017533093714385904
+school	[w2] of [w1] children	teacher	0.0021478039800122734
+school	[w2] of [w1] subjects	teacher	0.002586131322871921
+school	[w2] in [w1] health	teacher	0.00184097484001052
+school	[w2] in [w1] b	teacher	0.00276146226001578
+school	[w2] trained in [w1]	teacher	0.0021039712457263083
+school	[w2] employed at [w1]	teacher	0.006925572017182432
+school	[w2] to discuss [w1]	teacher	0.0020601385114403436
+school	[w2] of [w1] district	teacher	0.005654422722889454
+school	[w2] in [w1] situation	teacher	0.002717629525729815
+school	[w2] in [w1] setting	teacher	0.005479091785745595
+school	[w2] of [w1] system	teacher	0.019680897694398177
+school	[w2] came to [w1]	teacher	0.014420969580082406
+school	[w2] at that [w1]	teacher	0.032129394231612166
+school	[w2] in [w1] reform	teacher	0.0031997896028754273
+school	[w2] in [w1] building	teacher	0.01087051810291926
+school	[w2] come to [w1]	teacher	0.006399579205750855
+school	[w2] participation in [w1]	teacher	0.0536074340317349
+school	[w2] in making [w1]	teacher	0.0019724730428684143
+school	[w2] serving in [w1]	teacher	0.002498465854299991
+school	[w2] attached to [w1]	teacher	0.0017533093714385904
+school	[w2] comes to [w1]	teacher	0.013062154817217498
+school	[w2] works in [w1]	teacher	0.0030244586657315682
+school	[w2] at [w1] levels	teacher	0.006618742877180678
+school	[w2] goes to [w1]	teacher	0.0019286403085824494
+school	[w2] employed in [w1]	teacher	0.07381432453756466
+school	[w2] in [w1] district	teacher	0.07087753134040502
+school	[w2] return to [w1]	teacher	0.0029806259314456036
+school	[w2] is assigned to [w1]	teacher	0.27895595432300163
+school	[w2] in charge of [w1]	teacher	0.25122349102773245
+school	[w2] is employed in [w1]	teacher	0.18270799347471453
+school	[w2] in [w1] of education	teacher	0.12887438825448613
+school	[w2] is placed in [w1]	teacher	0.06525285481239804
+school	[w2] by type of [w1]	teacher	0.0929853181076672
