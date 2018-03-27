@@ -3,12 +3,16 @@
 
 ## What's in this repository?
 
+The repository contains the code used in the following paper:
+
+Paraphrase to Explicate: Revealing Implicit Noun-Compound Relations. Vered Shwartz and Ido Dagan. ACL 2018.
+
 This code is used for training a model that captures the semantic relations between two nouns, expressed in free text. We use this model to interpret noun-compounds in two task variants. 
 For example, the model can describe the relation between `olive` and `oil` (in `olive oil`) as 
-`oil is extracted from olives` or `oil is made from olives`. 
+`oil is extracted from olives` or `oil is made of olives`. 
 It can answer the question "what can be extracted from olives?" with `oil` 
 (where "what can be extracted from almonds?" would produce different results, such as `milk`), 
-and the question "what can oil be extracted from?".
+and the question "what can oil be extracted from?" with `olive`.
 
 ## How and why?
 
@@ -31,6 +35,10 @@ We train a prarphrasing model using [Google N-grams](https://books.google.com/ng
 - Python 3
 - [dyNET](https://dynet.readthedocs.io)
 - ScikitLearn
+
+### Loading the Pre-trained Model
+
+The pre-trained model can be downloaded from [here](https://drive.google.com/file/d/1TRB_hnwBkTKZVASV7iWJVjYIyxdv7yE-/view?usp=sharing).
 
 ### Training the Paraphrasing Model
 
@@ -143,7 +151,7 @@ Note that the directory needs to include the code for the SemEval scorer, that c
 
 #### Relation Classification
 
-In this task, noun-compounds are annotated to a predefined set of relations, and the model has to predict the correct 
+In this task, noun-compounds are annotated to a pre-defined set of relations, and the model has to predict the correct 
 relation between the constituents of an unobserved compound. For example, `olive oil` may belong to the `SOURCE` relation 
 while `morning meeting` belongs to the `TIME` relation. 
 
