@@ -19,7 +19,6 @@ import sys
 sys.path.append('../')
 sys.path.append('../../source')
 
-import codecs
 import random
 import itertools
 
@@ -30,8 +29,8 @@ import numpy as np
 from sklearn import svm
 from sklearn.externals import joblib
 
+from model.model import Model
 from semeval_2013_common import *
-from language_model.model import Model
 from common import load_binary_embeddings
 
 

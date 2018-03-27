@@ -38,7 +38,7 @@ from sklearn.svm import LinearSVC
 from sklearn.externals import joblib
 from sklearn.linear_model import LogisticRegression
 
-from language_model.model import Model
+from model.model import Model
 from dataset_reader import DatasetReader
 from common import load_binary_embeddings
 from evaluation_common import evaluate, output_predictions

@@ -4,13 +4,12 @@ ap = argparse.ArgumentParser()
 # Important note: the dynet arguments must be specified at the very beginning of the command line, before other options.
 ap.add_argument('--dynet-devices', help='the devices to use, e.g. "CPU,GPU:0,GPU:31" default=CPU', default='CPU')
 ap.add_argument('--dynet-mem', help='set dynet memory', default='512')
-ap.add_argument('--dynet-seed', help='Dynet random seed, default=3016748844', default=3016748844)
+ap.add_argument('--dynet-seed', help='Dynet random seed, default=28111986', default=28111986)
 ap.add_argument('--dynet-autobatch', help='whether to use autobatching (0/1)', default=1)
 ap.add_argument('--nepochs', help='number of epochs', type=int, default=10)
 ap.add_argument('--batch_size', help='number of instance per minibatch', type=int, default=10)
 ap.add_argument('--patience', help='how many epochs to wait without improvement', type=int, default=3)
 ap.add_argument('--update', help='whether to update the embeddings', action='store_true')
-ap.add_argument('--dropout', help='dropout rate', type=float, default='0.0') # TODO: implement
 ap.add_argument('--negative_sampling_ratio', help='the ratio from the training set of negative samples to add',
                 type=float, default='0.0')
 ap.add_argument('--negative_samples_weight', help='the weight to assign to negative samples', type=float, default='0.2')
@@ -49,7 +48,7 @@ import codecs
 from collections import defaultdict
 
 from model import Model
-from common import load_binary_embeddings, most_similar_words, save_binary_embeddings
+from common import load_binary_embeddings, save_binary_embeddings
 
 
 def main():
@@ -70,7 +69,7 @@ def main():
                     [w for (w1, p, w2, weight) in train_set + val_set for w in p.split()])
 
     wv, words = load_binary_embeddings(args.embeddings_file, vocab)
-    words = ['[w1]', '[w2]'] + list(words)
+    words = ['[w1]', '[w2]', '[par]'] + list(words)
     word2index = {w: i for i, w in enumerate(words)}
 
     if args.filter_vocab:
@@ -113,8 +112,7 @@ def main():
     logger.info('Training with the following arguments: {}'.format(args))
     model.fit(train_set, val_set)
 
-    # Try to predict some stuff (to be replaced with some kind of evaluation)
-    logger.info('Evaluation:')
+    logger.info('Sanity Check:')
     ncs = list(set([(w1_index, w2_index) for (w1_index, par_indices, w2_index, weight) in val_set]))
     for (w1_index, w2_index) in ncs:
         w1, w2 = words[w1_index], words[w2_index]

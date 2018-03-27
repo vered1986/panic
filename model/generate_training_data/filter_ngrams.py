@@ -47,6 +47,7 @@ def main():
     logger.info('Writing output to {}'.format(output))
     with codecs.open(output, 'w', 'utf-8', buffering=0) as f_out:
         for (w1, w2), paraphrases in extractions.items():
+
             # Split to different paraphrase lengths and spread a probability of 1.0 to each length
             paraphrase_by_length = defaultdict(list)
             [paraphrase_by_length[len(paraphrase.split())].append((paraphrase, weight))
