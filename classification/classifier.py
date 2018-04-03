@@ -1,7 +1,7 @@
 # Command line arguments
 import argparse
 ap = argparse.ArgumentParser()
-ap.add_argument('language_model_dir', help='the path to the trained language model')
+ap.add_argument('paraphrase_model_dir', help='the path to the trained paraphrasing model')
 ap.add_argument('word_embeddings_for_model', help='word embeddings to be used for the language model')
 ap.add_argument('word_embeddings_for_dist', help='word embeddings to be used for w1 and w2 embeddings')
 ap.add_argument('dataset_prefix', help='path to the train/test/val/rel data')
@@ -41,7 +41,7 @@ from sklearn.linear_model import LogisticRegression
 from model.model import Model
 from dataset_reader import DatasetReader
 from common import load_binary_embeddings
-from evaluation_common import evaluate, output_predictions
+from evaluation import evaluate, output_predictions
 
 
 def main():
@@ -54,7 +54,7 @@ def main():
     val_set = DatasetReader(args.dataset_prefix + '/val.tsv', label2index=train_set.label2index)
     test_set = DatasetReader(args.dataset_prefix + '/test.tsv', label2index=train_set.label2index)
 
-    # Generate the feature vectors using the world knowledge model
+    # Generate the feature vectors using the paraphrasing model
     logger.info('Generating feature vectors...')
     train_features, val_features, test_features = [], [], []
 
@@ -62,7 +62,7 @@ def main():
         logger.info('Reading word embeddings from {}...'.format(args.word_embeddings_for_model))
         wv, model_words = load_binary_embeddings(args.word_embeddings_for_model)
 
-        logger.info('Loading language model from {}...'.format(args.language_model_dir))
+        logger.info('Loading paraphrasing model from {}...'.format(args.paraphrase_model_dir))
         model = Model.load_model(args.language_model_dir, wv)
 
         model_words = ['[w1]', '[w2]', '[par]'] + model_words
@@ -151,8 +151,8 @@ def main():
 
 def predict_paraphrases(model, noun_compounds, words, word2index, UNK, k):
     """
-    Gets the language model and retrieves the best k paraphrases for each noun-compound.
-    :param model: the trained language model/
+    Gets the paraphrasing model and retrieves the best k paraphrases for each noun-compound.
+    :param model: the trained paraphrasing model
     :param noun_compounds: the list of noun-compounds in the dataset.
     :param words: the model vocabulary.
     :param word2index: the word to index dictionary.
@@ -195,7 +195,7 @@ def get_paraphrase_text(words, par_indices):
     """
     paraphrase_words = [words[i] for i in par_indices]
     paraphrase = ' '.join(paraphrase_words)
-    yield paraphrase
+    return paraphrase
 
 
 if __name__ == '__main__':

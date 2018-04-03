@@ -13,12 +13,12 @@ def output_predictions(predictions_file, relations, predictions, test_set_keys, 
     :param predictions_file: the output file path
     :param relations: the ordered list of relations
     :param predictions: the predicted labels for the test set
-    :param test_set: the test set - a list of (x, y, sent_x, sent_y, relation, score) instances
+    :param test_set: the test set - a list of (w1, w2, relation) instances
     :return:
     """
     with codecs.open(predictions_file, 'w', 'utf-8') as f_out:
-        for i, (x, y) in enumerate(test_set_keys):
-            f_out.write('\t'.join([x, y, relations[test_labels[i]], relations[predictions[i]]]) + '\n')
+        for i, (w1, w2) in enumerate(test_set_keys):
+            f_out.write('\t'.join([w1, w2, relations[test_labels[i]], relations[predictions[i]]]) + '\n')
 
 
 def evaluate(y_test, y_pred, relations, do_full_reoprt=False):
