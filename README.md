@@ -92,3 +92,4 @@ where `embeddings_file` is the path to word embeddings files
 
 1. [Paraphrasing](paraphrasing/README.md)
 2. [Relation Classification](classification/README.md)
+2. [Compositionality Prediction](compositionality/README.md)
