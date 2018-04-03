@@ -90,6 +90,6 @@ where `embeddings_file` is the path to word embeddings files
 
 ### Noun-Compound Interpretation Tasks
 
-1. [Paraphrasing](paraphrasing/README.md)
-2. [Relation Classification](classification/README.md)
-2. [Compositionality Prediction](compositionality/README.md)
+1. [Paraphrasing](paraphrasing)
+2. [Relation Classification](classification)
+2. [Compositionality Prediction](compositionality)
